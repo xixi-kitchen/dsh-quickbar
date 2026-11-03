@@ -631,6 +631,15 @@ else
     fail "input hierarchy" "the NSScrollView/NSTextView is not added to the container"
 fi
 
+# Regression: the helper is menu-bar-less, so Cmd+V needs an Edit menu (or the
+# performKeyEquivalent override) to reach paste: on the focused text view.
+if grep -Fq 'qb_install_edit_menu();' "$SRC" && \
+   { grep -Fq 'performKeyEquivalent:(NSEvent *)event' "$SRC" || grep -Fq '@"paste:"' "$SRC"; }; then
+    pass "Cmd+V is routed to paste: (Edit menu + key-equivalent override)"
+else
+    fail "Cmd+V routing" "no Edit menu / key-equivalent path for paste"
+fi
+
 # Regression: a transient key-window grab (IME / clipboard picker) must not
 # close the palette; only losing activation does.
 if grep -Fq 'kBQResignHideDelay' "$SRC" && grep -Fq 'if ([NSApp isActive])' "$SRC"; then

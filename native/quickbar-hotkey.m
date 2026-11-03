@@ -1162,6 +1162,24 @@ typedef NS_ENUM(NSInteger, QBSendState) {
     [super paste:sender];
 }
 
+- (BOOL)performKeyEquivalent:(NSEvent *)event {
+    NSEventModifierFlags flags = [event modifierFlags] & NSEventModifierFlagDeviceIndependentFlagsMask;
+    NSString *chars;
+
+    if (flags == NSEventModifierFlagCommand) {
+        chars = [[event charactersIgnoringModifiers] lowercaseString];
+        if ([chars isEqualToString:@"v"]) {
+            if (_owningController != nil &&
+                [_owningController pasteFromPasteboard:[NSPasteboard generalPasteboard]]) {
+                return YES;
+            }
+            [super paste:nil];
+            return YES;
+        }
+    }
+    return [super performKeyEquivalent:event];
+}
+
 - (void)keyDown:(NSEvent *)event {
     unsigned short keyCode = [event keyCode];
 
@@ -1195,6 +1213,50 @@ typedef NS_ENUM(NSInteger, QBSendState) {
 /* ------------------------------------------------------------------------- */
 /* Small helpers used by the controller                                       */
 /* ------------------------------------------------------------------------- */
+
+/*
+ * The helper is a menu-bar-less accessory app, so standard editing shortcuts
+ * (Cmd+V in particular) have no menu item to route them to the focused text
+ * view. Install a minimal Edit menu: its key equivalents are still dispatched
+ * to the key window's first responder even though an accessory app shows no
+ * menu bar. Without this, Cmd+V did nothing in the palette.
+ */
+static void qb_install_edit_menu(void) {
+    NSMenu *mainMenu;
+    NSMenuItem *editItem;
+    NSMenu *editMenu;
+    NSArray *items;
+    NSArray *specs;
+    NSUInteger index;
+
+    mainMenu = [[NSMenu alloc] initWithTitle:@""];
+    editItem = [[NSMenuItem alloc] initWithTitle:@"" action:nil keyEquivalent:@""];
+    [mainMenu addItem:editItem];
+    editMenu = [[NSMenu alloc] initWithTitle:@"Edit"];
+    [editItem setSubmenu:editMenu];
+    [editMenu release];
+
+    items = [NSArray arrayWithObjects:
+                 [NSArray arrayWithObjects:@"Undo", @"undo:", @"z", @(NSEventModifierFlagCommand), nil],
+                 [NSArray arrayWithObjects:@"Redo", @"redo:", @"Z", @(NSEventModifierFlagCommand | NSEventModifierFlagShift), nil],
+                 [NSArray arrayWithObjects:@"Cut", @"cut:", @"x", @(NSEventModifierFlagCommand), nil],
+                 [NSArray arrayWithObjects:@"Copy", @"copy:", @"c", @(NSEventModifierFlagCommand), nil],
+                 [NSArray arrayWithObjects:@"Paste", @"paste:", @"v", @(NSEventModifierFlagCommand), nil],
+                 [NSArray arrayWithObjects:@"Select All", @"selectAll:", @"a", @(NSEventModifierFlagCommand), nil],
+                 nil];
+    specs = items;
+    for (index = 0; index < [specs count]; index++) {
+        NSArray *spec = [specs objectAtIndex:index];
+        NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:[spec objectAtIndex:0]
+                                                      action:NSSelectorFromString([spec objectAtIndex:1])
+                                               keyEquivalent:[spec objectAtIndex:2]];
+        [item setKeyEquivalentModifierMask:[[spec objectAtIndex:3] unsignedIntegerValue]];
+        [editMenu addItem:item];
+        [item release];
+    }
+    [NSApp setMainMenu:mainMenu];
+    [mainMenu release];
+}
 
 static NSMenu *qb_popup_menu(NSPopUpButton *popup) {
     NSMenu *menu = [popup menu];
@@ -2927,6 +2989,22 @@ static NSImage *qb_make_test_image(void) {
     [self logInteraction:(!_panelVisible && [[self currentText] length] == 0)
                   format:@"Esc -> hidden + content cleared (CANCEL emitted on stdout)"];
 
+    /* 4b. Cmd+V routing: the Edit menu must exist and a command-V event must
+     *     reach the paste path (this is what made the palette look "dead"). */
+    {
+        NSMenuItem *editItem = [[NSApp mainMenu] itemAtIndex:0];
+        NSMenu *editMenu = [editItem submenu];
+        BOOL hasPaste = NO;
+        for (NSMenuItem *item in [editMenu itemArray]) {
+            if ([[item keyEquivalent] isEqualToString:@"v"] &&
+                ([item keyEquivalentModifierMask] & NSEventModifierFlagCommand) != 0) {
+                hasPaste = YES;
+            }
+        }
+        [self logInteraction:(editMenu != nil && hasPaste)
+                      format:@"Edit menu routes Cmd+V to paste: to the focused field"];
+    }
+
     /* 5. Paste image: decode from a private pasteboard, chips, 4-image cap,
      *    remove button, SUBMIT payload shape. */
     {
@@ -3657,6 +3735,7 @@ static int qb_run_interaction_test(void) {
 
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        qb_install_edit_menu();
 
         controller = [[QBController alloc] init];
         [controller setAutomatedMode:QBAutomatedInteraction];
@@ -3686,6 +3765,7 @@ static int qb_run_interactive(const QbSpec *spec) {
          */
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
+        qb_install_edit_menu();
 
         if (!qb_install_hotkey_handler()) {
             return QB_EXIT_ERROR;

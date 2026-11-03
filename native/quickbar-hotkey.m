@@ -108,7 +108,7 @@ static const CGFloat kQBInputContainerInsetX = 4.0;
 static const CGFloat kQBInputContainerInsetY = 2.0;
 
 /* Fixed type scale (no fluid sizes; DESIGN.md §4). */
-static const CGFloat kQBInputFontSize = 15.0;
+static const CGFloat kQBInputFontSize = 13.0;
 /* Grace period before a lost key window closes the palette: transient focus
  * grabs (IME candidates, clipboard pickers) hand focus back within it. */
 static const NSTimeInterval kBQResignHideDelay = 0.35;
@@ -117,7 +117,7 @@ static const CGFloat kQBHintFontSize = 11.5;
 static const CGFloat kQBSmallLabelFontSize = 11.0;
 static const CGFloat kQBSendFontSize = 13.0;
 static const CGFloat kQBErrorFontSize = 13.0;
-static const CGFloat kQBInputLineSpacing = 3.0;
+static const CGFloat kQBInputLineSpacing = 2.0;
 
 /* Motion budget (milliseconds) — motion only expresses state, never > 250 ms. */
 enum {
@@ -517,7 +517,7 @@ typedef NS_ENUM(NSInteger, QBSendState) {
 - (QBSendState)sendState;
 @end
 
-/* Input row container: focus ring + placeholder live here (drawn behind the
+/* Input row container: the darker field fill + placeholder live here (behind the
  * transparent text view). */
 @interface QBInputContainer : NSView {
     BOOL _focused;
@@ -556,7 +556,7 @@ typedef NS_ENUM(NSInteger, QBSendState) {
     NSImageView *_workspaceChevron;
     NSImageView *_modelChevron;
     NSImageView *_effortChevron;
-    NSTextField *_footerLeft;
+    NSControl *_footerLeft;   /* label or borderless paste button */
     NSTextField *_footerRight;
     NSTextField *_errorLabel;
     NSView *_separator;
@@ -649,6 +649,9 @@ typedef NS_ENUM(NSInteger, QBSendState) {
 - (void)failSendingWithMessage:(NSString *)message diag:(NSString *)diag;
 - (void)failAfterTimeout;
 - (void)showError:(NSString *)message persistent:(BOOL)persistent;
+- (void)showHint:(NSString *)message;
+- (void)pasteButtonClicked:(id)sender;
+- (NSString *)footerLeftText;
 - (void)clearError;
 - (void)transientErrorTimerFired:(NSTimer *)timer;
 - (void)addChipView:(QBChipView *)chip;
@@ -817,7 +820,7 @@ typedef NS_ENUM(NSInteger, QBSendState) {
                                            yRadius:kQBImageChipCornerRadius];
     [NSGraphicsContext saveGraphicsState];
     [clip addClip];
-    [[NSColor quaternaryLabelColor] setFill];
+    [[[NSColor blackColor] colorWithAlphaComponent:0.18] setFill];
     NSRectFill(bounds);
     if (_image != nil) {
         NSSize imageSize = [_image size];
@@ -838,6 +841,14 @@ typedef NS_ENUM(NSInteger, QBSendState) {
         }
     }
     [NSGraphicsContext restoreGraphicsState];
+    {
+        NSBezierPath *border = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(bounds, 0.5, 0.5)
+                                                               xRadius:kQBImageChipCornerRadius
+                                                               yRadius:kQBImageChipCornerRadius];
+        [border setLineWidth:1.0];
+        [[[NSColor separatorColor] colorWithAlphaComponent:0.45] setStroke];
+        [border stroke];
+    }
 }
 @end
 
@@ -1096,12 +1107,26 @@ typedef NS_ENUM(NSInteger, QBSendState) {
     NSRect bounds = self.bounds;
     (void)dirtyRect;
 
-    if (_focused) {
-        NSRect ring = NSInsetRect(bounds, 1.0, 1.0);
-        NSBezierPath *path = [NSBezierPath bezierPathWithRoundedRect:ring xRadius:8.0 yRadius:8.0];
-        [path setLineWidth:2.0];
-        [[[NSColor controlAccentColor] colorWithAlphaComponent:0.18] setStroke];
-        [path stroke];
+    /*
+     * No stroke: the field is identified by a fill slightly darker than the
+     * card; focus deepens it instead of adding a ring (DESIGN.md: one
+     * elevation, no decorative borders).
+     */
+    {
+        BOOL dark = [[self.effectiveAppearance
+            bestMatchFromAppearancesWithNames:@[ NSAppearanceNameAqua, NSAppearanceNameDarkAqua ]]
+            isEqualToString:NSAppearanceNameDarkAqua];
+        CGFloat alpha = dark ? 0.22 : 0.06;
+        if (_focused) {
+            alpha += dark ? 0.07 : 0.04;
+        }
+        {
+            NSBezierPath *fill = [NSBezierPath bezierPathWithRoundedRect:bounds
+                                                                 xRadius:10.0
+                                                                 yRadius:10.0];
+            [[[NSColor blackColor] colorWithAlphaComponent:alpha] setFill];
+            [fill fill];
+        }
     }
     if (_showsPlaceholder) {
         NSFont *font = [NSFont systemFontOfSize:kQBInputFontSize];
@@ -1469,7 +1494,6 @@ static NSImage *qb_make_test_image(void) {
     QBPasteTextView *textView;
     NSTextField *errorLabel;
     QBLineView *separator;
-    NSTextField *footerLeft;
     NSTextField *footerRight;
     QBSendButton *sendButton;
     NSMutableParagraphStyle *paragraph;
@@ -1584,10 +1608,19 @@ static NSImage *qb_make_test_image(void) {
     _separator = separator;
     [_cardView addSubview:separator];
 
-    footerLeft = qb_make_label(@"⌘V 粘图", kQBHintFontSize, [NSColor secondaryLabelColor],
-                               NSTextAlignmentLeft);
-    _footerLeft = footerLeft;
-    [_cardView addSubview:footerLeft];
+    {
+        NSButton *paste = [[NSButton alloc] initWithFrame:NSZeroRect];
+        [paste setBordered:NO];
+        [paste setButtonType:NSButtonTypeMomentaryChange];
+        [paste setFocusRingType:NSFocusRingTypeNone];
+        [paste setTitle:@"⌘V 粘图"];
+        [paste setFont:[NSFont systemFontOfSize:kQBHintFontSize]];
+        [paste setContentTintColor:[NSColor secondaryLabelColor]];
+        [paste setTarget:self];
+        [paste setAction:@selector(pasteButtonClicked:)];
+        _footerLeft = paste;
+    }
+    [_cardView addSubview:_footerLeft];
 
     footerRight = qb_make_label(@"Enter 发送 · Shift+Enter 换行 · Esc 关闭", kQBHintFontSize,
                                 [NSColor secondaryLabelColor], NSTextAlignmentRight);
@@ -1853,7 +1886,7 @@ static NSImage *qb_make_test_image(void) {
     [_footerRight setFrame:NSMakeRect(NSMinX([_sendButton frame]) - 12.0 - hintWidth,
                                       footerY + floor((kQBFooterHeight - 16.0) / 2.0), hintWidth,
                                       16.0)];
-    hintWidth = ceil([[_footerLeft stringValue] sizeWithAttributes:hintAttributes].width) + 8.0;
+    hintWidth = ceil([[self footerLeftText] sizeWithAttributes:hintAttributes].width) + 8.0;
     [_footerLeft setFrame:NSMakeRect(kQBHorizontalInset,
                                      footerY + floor((kQBFooterHeight - 16.0) / 2.0), hintWidth,
                                      16.0)];
@@ -2251,8 +2284,14 @@ static NSImage *qb_make_test_image(void) {
     [self clearError];
 }
 
+- (void)showHint:(NSString *)message {
+    [self showError:message persistent:NO];
+    [_errorLabel setTextColor:[NSColor secondaryLabelColor]];
+}
+
 - (void)showError:(NSString *)message persistent:(BOOL)persistent {
     NSString *line = qb_single_line(message, 200);
+    [_errorLabel setTextColor:[NSColor systemRedColor]];
 
     [self invalidateTransientErrorTimer];
     [_errorText release];
@@ -2314,6 +2353,20 @@ static NSImage *qb_make_test_image(void) {
     [self layoutContent];
 }
 
+- (NSString *)footerLeftText {
+    if ([_footerLeft isKindOfClass:[NSButton class]]) {
+        return [(NSButton *)_footerLeft title];
+    }
+    return [_footerLeft stringValue];
+}
+
+- (void)pasteButtonClicked:(id)sender {
+    (void)sender;
+    if (![self pasteFromPasteboard:[NSPasteboard generalPasteboard]]) {
+        [self showHint:@"剪贴板里没有图片，先复制一张图片再粘贴"];
+    }
+}
+
 - (BOOL)pasteFromPasteboard:(NSPasteboard *)pasteboard {
     NSImage *image = qb_pasteboard_image(pasteboard);
 
@@ -2347,6 +2400,8 @@ static NSImage *qb_make_test_image(void) {
         }
         [self updateSendButtonState];
         [self layoutContent];
+        [self showHint:[NSString stringWithFormat:@"已添加图片 %lu/%d",
+                                                  (unsigned long)[_images count], (int)kQBMaxImages]];
     }
     return YES;
 }
@@ -2793,9 +2848,9 @@ static NSImage *qb_make_test_image(void) {
                              kQBImageChipSize == 56.0 && kQBSendButtonHeight == 26.0)
                   format:@"geometry card-radius=16 toolbar=26 input-min=44 max-lines=5 "
                          @"chip=56 send=26"];
-    [self logInteraction:(kQBInputFontSize == 15.0 && kQBControlFontSize == 13.0 &&
+    [self logInteraction:(kQBInputFontSize == 13.0 && kQBControlFontSize == 13.0 &&
                              kQBHintFontSize == 11.5 && kQBSmallLabelFontSize == 11.0)
-                  format:@"type-scale input=15 controls=13 hints=11.5 pills=11"];
+                  format:@"type-scale input=13 controls=13 hints=11.5 pills=11"];
     {
         BOOL cardOk = [_cardView isKindOfClass:[NSVisualEffectView class]] &&
                       [[_cardView layer] cornerRadius] == kQBCardCornerRadius &&
@@ -2823,15 +2878,15 @@ static NSImage *qb_make_test_image(void) {
                        [[_textView string] length] == 0 && ![_textView isRichText] &&
                        ![_textView drawsBackground] &&
                        inputFont != nil &&
-                       fabs([inputFont pointSize] - 15.0) < 0.01 &&
+                       fabs([inputFont pointSize] - 13.0) < 0.01 &&
                        ![_textView isAutomaticQuoteSubstitutionEnabled] &&
                        [_sendButton sendState] == QBSendStateDisabled &&
                        [[_footerRight stringValue] rangeOfString:@"Enter 发送"].location != NSNotFound &&
                        [[_footerRight stringValue] rangeOfString:@"Shift+Enter"].location != NSNotFound &&
                        [[_footerRight stringValue] rangeOfString:@"Esc 关闭"].location != NSNotFound &&
-                       [[_footerLeft stringValue] rangeOfString:@"⌘V 粘图"].location != NSNotFound;
+                       [[self footerLeftText] rangeOfString:@"⌘V 粘图"].location != NSNotFound;
         [self logInteraction:inputOk
-                      format:@"multi-line transparent plain-text input 15pt, smart quotes off, "
+                      format:@"multi-line transparent plain-text input 13pt, smart quotes off, "
                              @"footer hints + accent send pill, send disabled when empty"];
     }
 
@@ -2893,6 +2948,23 @@ static NSImage *qb_make_test_image(void) {
                       format:@"Cmd+V image chips: 4 attached, 5th rejected (max 4) with inline error"];
         [self logInteraction:(_errorText.length > 0 && ![_errorLabel isHidden])
                       format:@"inline error row visible for the image limit"];
+        {
+            /* The chips are the only visual proof a paste worked: they must be
+             * laid out inside the card, non-empty, and parented to it. */
+            BOOL chipsOk = [_imageChips count] == kQBMaxImages;
+            NSRect cardBounds = [_cardView bounds];
+            for (QBChipView *chip in _imageChips) {
+                NSRect frame = [chip frame];
+                if ([chip superview] != _cardView || NSWidth(frame) < 20.0 ||
+                    NSHeight(frame) < 20.0 || !NSContainsRect(cardBounds, frame)) {
+                    chipsOk = NO;
+                }
+            }
+            [self logInteraction:chipsOk
+                          format:@"image chips visible inside the card (%lu chips, %0.fx%0.f)",
+                                 (unsigned long)[_imageChips count], kQBImageChipSize,
+                                 kQBImageChipSize];
+        }
         {
             NSDictionary *payload = [self currentSubmitPayload];
             NSArray *images = [payload objectForKey:@"images"];

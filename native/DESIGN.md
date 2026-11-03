@@ -34,15 +34,19 @@
   - 次级文字（选择器标签、快捷键提示）`secondaryLabelColor`；禁用 `tertiaryLabelColor`；
   - 强调色 **只用于**：发送按钮底色（`controlAccentColor`）、输入框聚焦环、图像缩略图选中描边；
   - 错误 `systemRed`；成功态用 `systemGreen` 仅在"已发送"的 150ms 反馈里出现。
-- **聚焦**：输入区获得焦点时，输入行容器显示 2 pt 圆角内描边 `controlAccentColor` 18% 透明
-  （不要整块变色）；失焦回到透明。
+- **输入区不用描边**：用比卡片更深的一层填充色标识输入区（深色 22% 黑、浅色 6% 黑）；
+  聚焦时把这层填充再加深一点（深色 +7%、浅色 +4%），不加任何边框/描边。
+- **插图预览**：粘贴后出现 56×56 缩略图（圆角 8、深色底 18% + 1px separator 描边 45%），
+  右上角 hover 出现移除按钮；同时在输入区下方显示一行中性提示「已添加图片 N/4」（2.5s 自动消失）。
+- **粘图入口**：底栏左侧的「⌘V 粘图」是可点击按钮（不是纯提示），用于剪贴板管理器把 ⌘V
+  发给别的 App、浮窗收不到粘贴时的手动兜底。
 - **无外边框 + 有内部阴影**：避免"幽灵卡片"（1px 边框 + 宽阴影同时存在）。
 
 ## 4. 排版
 
 - 单一字族：**系统字体**（`NSFont.systemFont`，SF Pro）。Operate 表面不需要展示字体。
 - 固定字号（不做流式）：
-  - 输入文字 **15 pt**，行高 1.4（`NSParagraphStyle.lineSpacing ≈ 3`）；
+  - 输入文字 **13 pt**（与其他控件一致），行高 1.35（`NSParagraphStyle.lineSpacing ≈ 2`）；
   - 选择器按钮文字 **13 pt**（medium 字重）；选择器小标签 **11 pt**（secondary，全大写不加字距）；
   - 底栏快捷键提示 **11.5 pt**（secondary）；数字（pid/计数）使用 tabular（`monospacedDigitSystemFont`）。
 - 字重对比只两档：regular（正文）/ medium（可操作控件）。不用 bold 做强调。

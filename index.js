@@ -251,6 +251,7 @@ class QuickbarService extends TypertRemoteService {
           : {
               text: this.pendingSubmit.text,
               selection: this.pendingSubmit.selection === undefined ? null : this.pendingSubmit.selection,
+              images: Array.isArray(this.pendingSubmit.images) ? this.pendingSubmit.images : [],
               at: this.pendingSubmit.at,
             },
     }
@@ -528,9 +529,10 @@ class QuickbarService extends TypertRemoteService {
               model: wireSelectionField(parsed.model),
               reasoningEffort: wireSelectionField(parsed.reasoningEffort),
             },
+            images: wireImages(parsed.images),
           }
         } else {
-          payload = { text: decoded, selection: undefined }
+          payload = { text: decoded, selection: undefined, images: [] }
         }
       } catch (error) {
         logWarn(this.ctx, '[quickbar] ignoring a SUBMIT line with an undecodable payload:', error)
@@ -799,17 +801,23 @@ class QuickbarService extends TypertRemoteService {
     try {
       if (payload.selection !== undefined) this.mergeSelection(payload.selection)
       this.pushCfg()
-      this.fireSubmit({ text: payload.text, selection: this.selectionSnapshot() })
+      this.fireSubmit({
+        text: payload.text,
+        selection: this.selectionSnapshot(),
+        images: Array.isArray(payload.images) ? payload.images : [],
+      })
     } catch (error) {
       logWarn(this.ctx, '[quickbar] native submit failed:', error)
     }
   }
 
   /**
-   * One native-popup submission: remember it for late clients, fan it out as a
-   * `submit` event, then raise the main window so the streamed answer is visible.
-   * @param submission - `{ text, selection }`; the selection overrides the
-   *   client's remembered defaults for this one prompt.
+   * One native-popup submission: remember it for late clients and fan it out as
+   * a `submit` event. v5 sends first and raises afterwards: the client calls
+   * `raiseWindow()` once the prompt is accepted, so the window never appears
+   * before the message is on its way.
+   * @param submission - `{ text, selection, images }`; the selection overrides
+   *   the client's remembered defaults for this one prompt.
    */
   fireSubmit(submission) {
     try {
@@ -821,13 +829,51 @@ class QuickbarService extends TypertRemoteService {
         submission !== null && typeof submission === 'object' && submission.selection !== undefined
           ? submission.selection
           : this.selectionSnapshot()
+      const images = submission !== null && typeof submission === 'object' && Array.isArray(submission.images)
+        ? submission.images
+        : []
       this.nonce += 1
       this.lastTriggerAt = at
-      this.pendingSubmit = { text, selection, at }
-      this.publish({ type: 'submit', text, selection, nonce: this.nonce, at })
-      if (this.raiseWindowEnabled) this.raiseWindowBestEffort()
+      this.pendingSubmit = { text, selection, images, at }
+      this.publish({ type: 'submit', text, selection, images, nonce: this.nonce, at })
     } catch (error) {
       logWarn(this.ctx, '[quickbar] native submit failed:', error)
+    }
+  }
+
+  /**
+   * Raise the Harness window on the client's request (send-then-raise).
+   * Respects the same `raiseWindow` config; never throws.
+   */
+  raiseWindow() {
+    if (this.raiseWindowEnabled) this.raiseWindowBestEffort()
+    return { ok: true }
+  }
+
+  /**
+   * The client reports the outcome of one native-popup submission so the panel
+   * can close (`SUBMIT_OK`) or show its inline error (`SUBMIT_FAIL <text>`).
+   * Best effort: a missing helper/stdin is only a debug breadcrumb.
+   * @param ok - whether the prompt was accepted
+   * @param message - failure reason shown inline in the panel
+   */
+  reportSubmitResult(ok, message) {
+    try {
+      const stdin = this.stdin
+      if (stdin === undefined || stdin === null || typeof stdin.write !== 'function' || stdin.writable === false) {
+        logDebug(this.ctx, '[quickbar] reportSubmitResult: helper stdin is unavailable')
+        return { ok: true }
+      }
+      if (ok === true) {
+        stdin.write('SUBMIT_OK\n')
+        return { ok: true }
+      }
+      const reason = typeof message === 'string' && message.trim() !== '' ? message.replace(/\s+/g, ' ').slice(0, 500) : 'unknown error'
+      stdin.write(`SUBMIT_FAIL ${reason}\n`)
+      return { ok: true }
+    } catch (error) {
+      logWarn(this.ctx, '[quickbar] reportSubmitResult could not write to the helper stdin:', error)
+      return { ok: true }
     }
   }
 
@@ -958,6 +1004,31 @@ function wireSelectionField(value) {
   if (value === undefined) return undefined
   if (value === null) return null
   return String(value)
+}
+
+/**
+ * Validate the native popup's pasted-image list for one submit. Each entry is
+ * `{ mediaType, base64, name?, width?, height? }`; invalid entries are dropped.
+ * @param value - decoded SUBMIT payload field
+ */
+function wireImages(value) {
+  if (!Array.isArray(value)) return []
+  const images = []
+  for (const entry of value) {
+    if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) continue
+    const mediaType = typeof entry.mediaType === 'string' ? entry.mediaType : ''
+    const base64 = typeof entry.base64 === 'string' ? entry.base64 : ''
+    if (mediaType === '' || base64 === '') continue
+    if (images.length >= 4) break
+    images.push({
+      mediaType,
+      base64,
+      ...(typeof entry.name === 'string' && entry.name !== '' ? { name: entry.name } : {}),
+      ...(typeof entry.width === 'number' && Number.isFinite(entry.width) ? { width: entry.width } : {}),
+      ...(typeof entry.height === 'number' && Number.isFinite(entry.height) ? { height: entry.height } : {}),
+    })
+  }
+  return images
 }
 
 /**
@@ -1095,6 +1166,8 @@ markRemoteMethods(QuickbarService.prototype, [
   { method: 'getState' },
   { method: 'testTrigger' },
   { method: 'setSelection' },
+  { method: 'raiseWindow' },
+  { method: 'reportSubmitResult' },
   { method: 'watch', mode: 'stream' },
 ])
 

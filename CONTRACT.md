@@ -420,3 +420,65 @@ SUBMIT <base64( { text: <utf8>, workspaceId, provider, model, reasoningEffort|nu
 - User: global hotkey → native popup shows three pickers reflecting the remembered
   selection; change workspace/model/effort there; Enter → main window shows the answer
   in the chosen workspace with the chosen model; the in-app overlay reflects the same.
+
+---
+
+# v5 — interaction & visual pass (native popup UX)
+
+## Native helper (`native/quickbar-hotkey.m`) — see `native/DESIGN.md`
+
+- **Multi-line input**: NSTextView (auto-grow to 5 lines, then internal scroll). Enter sends,
+  Shift+Enter newlines, IME-aware (`hasMarkedText` guard).
+- **Toggle**: the global hotkey opens the panel when hidden and closes it when visible
+  (no submit). Esc closes and clears. Clicking outside the panel closes it
+  (`windowDidResignKey`). The panel remembers its dragged position.
+- **Paste image**: ⌘V with an image clipboard attaches it (max 4, 56×56 chips with remove),
+  no file attachments in this popup.
+- **States**: `sending` (spinner in the send button, input disabled, panel stays open),
+  `sent` (150 ms check, then close), `error` (inline red row, text kept). The helper must not
+  close the panel on submit if the host reports a failure — the host acknowledges via stdin.
+- **Visual**: `native/DESIGN.md` is authoritative (material, radius, shadow, type scale,
+  pill selectors, footer hints, motion ≤ 250 ms).
+- **SUBMIT payload** gains `images`:
+  `SUBMIT <base64({ text, workspaceId, provider, model, reasoningEffort, images:[{mediaType, base64, name?, width?, height?}] })>`
+- **stdin** gains two control lines from the host:
+  - `SUBMIT_OK` — the host accepted the submission; the panel may close (or show `sent`).
+  - `SUBMIT_FAIL <text>` — the host/client rejected it; show the inline error, keep the text.
+  (`CFG` and `trigger` unchanged.)
+
+## Host (`index.js`)
+
+- Structured `SUBMIT` parsing keeps `images` in the event: `pendingSubmit = { text, selection,
+  images, at }`, broadcast `{ type:'submit', text, selection, images, nonce, at }`.
+- **No window raise inside `fireSubmit`**: the client raises the window *after* the prompt is
+  accepted (send-then-raise). New direct remote `raiseWindow()` → `open dsh://open` when
+  `config.raiseWindow` is true; returns `{ ok: true }`.
+- New direct remote `reportSubmitResult(ok, message?)` (client → host): the host writes
+  `SUBMIT_OK` or `SUBMIT_FAIL <message>` to the helper stdin so the native panel can close
+  or show the error.
+- Helper stdout `TRIGGER`/`SUBMIT`/`CANCEL` handling otherwise unchanged.
+
+## Client (`client.js`)
+
+- `submit` events / `pendingSubmit` now carry `images`; `submitExternal(text, selection, images)`
+  passes them to the existing `submitPrompt(text, { images, files: [] })` (the v2 image parts +
+  beginSubmission attachments already exist).
+- On submit success/failure, call `reportSubmitResult(ok, message)` so the native panel closes
+  or shows the inline error (fire-and-forget; ignore failures).
+- After a successful prompt, call `raiseWindow()` (send-then-raise).
+- **Auto-scroll**: after navigation/prompt, scroll the conversation to the newly sent message
+  (best effort: scroll the conversation scroll container to the bottom).
+- **First-run guidance**: once per install (localStorage flag), show a dismissible notice with
+  the hotkey and a "去设置" action.
+- **Hotkey conflict notice**: when `getState().hotkeyState === 'error'` (e.g. `register-failed`),
+  show a visible dismissible notice with the reason and a "去设置" action (once per state change).
+- **Settings polish**: follow `native/DESIGN.md`'s language (type scale, spacing, semantic colors,
+  state completeness) for the 快捷唤起 settings page; show conflict clearly and suggest a
+  recommended combo.
+
+## Acceptance
+
+- Native: `--selftest` unchanged; `--ui-test` emits a structured SUBMIT that may include images;
+  `check.sh` extended for the new protocol lines; universal binary rebuilt.
+- Host/client: `node --check`; harness/isolated run proves submit-with-images, report/raise
+  ordering, first-run + conflict notices, and auto-scroll.

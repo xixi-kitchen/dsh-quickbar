@@ -72,6 +72,16 @@ window.__ModuleLoader__.load({
     const PENDING_SUBMIT_TTL_MS = 15000;
     /** Clock tolerance between a `submit` event's `at` and `pendingSubmit.at` of the same trigger. */
     const SUBMIT_MARKER_TOLERANCE_MS = 300;
+    const LS_ONBOARDED_KEY = 'dsh-quickbar:onboarded';
+    const LS_CONFLICT_KEY = 'dsh-quickbar:conflict-dismissed';
+    /** Media types the prompt image part accepts (mirrors the conversation client). */
+    const INCOMING_IMAGE_MEDIA_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+    /** Fixed type scale (DESIGN.md): one family, two weights, four sizes. */
+    const TYPE = { title: 17, body: 13, hint: 11.5, caption: 11, control: 13 };
+    /** Semantic spacing scale. */
+    const SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 20 };
+    /** Suggested replacements for a conflicted global hotkey (first valid one wins). */
+    const SUGGESTED_HOTKEYS = ['cmd+shift+opt+space', 'cmd+opt+space', 'cmd+shift+ctrl+space', 'ctrl+opt+space', 'shift+opt+space', 'cmd+shift+f9'];
     /** Attachment limits kept for this overlay (images are inline base64 parts). */
     const MAX_IMAGES = 4;
     const MAX_FILES = 4;
@@ -172,6 +182,23 @@ window.__ModuleLoader__.load({
       overlayRemoveAttachment: '移除附件',
       overlayWorkspaceCreateFailed: '无法在该工作区创建会话：{message}',
       overlayUnsupportedContent: '当前无法发送附件。',
+      noticeOnboardingTitle: '快捷唤起已就绪',
+      noticeOnboardingBody: '按 {hotkey} 随时唤起快捷输入；回车发送，Esc 关闭。',
+      noticeConflictTitle: '全局快捷键注册失败',
+      noticeConflictBody: '{hotkey} 注册失败：{message}',
+      noticeConflictSuggestion: '建议改用 {hotkey}',
+      noticeGoSettings: '去设置',
+      noticeDismiss: '知道了',
+      noticeClose: '关闭提示',
+      settingsConflictTitle: '快捷键冲突',
+      settingsConflictHint: '系统拒绝了当前快捷键，通常是被其他应用占用。换一个组合后会自动重新注册。',
+      settingsSuggestion: '建议组合：{hotkey}',
+      settingsUseSuggestion: '改用此组合',
+      settingsReRegister: '重新注册',
+      settingsReRegistering: '注册中…',
+      settingsReRegistered: '已请求重新注册快捷键。',
+      settingsReRegisterFailed: '重新注册失败：{message}',
+      settingsSuggestionApplied: '已改用 {hotkey}。',
     };
 
     const EN = {
@@ -253,6 +280,23 @@ window.__ModuleLoader__.load({
       overlayRemoveAttachment: 'Remove attachment',
       overlayWorkspaceCreateFailed: 'Could not create a session in that workspace: {message}',
       overlayUnsupportedContent: 'Attachments cannot be sent right now.',
+      noticeOnboardingTitle: 'Quickbar is ready',
+      noticeOnboardingBody: 'Press {hotkey} any time to open the quick input; Enter sends, Esc closes.',
+      noticeConflictTitle: 'Global shortcut failed',
+      noticeConflictBody: '{hotkey} could not be registered: {message}',
+      noticeConflictSuggestion: 'Try {hotkey} instead',
+      noticeGoSettings: 'Open settings',
+      noticeDismiss: 'Got it',
+      noticeClose: 'Dismiss notice',
+      settingsConflictTitle: 'Shortcut conflict',
+      settingsConflictHint: 'The system rejected this shortcut — usually another app owns it. Pick another combination and it re-registers automatically.',
+      settingsSuggestion: 'Suggested: {hotkey}',
+      settingsUseSuggestion: 'Use this combination',
+      settingsReRegister: 'Re-register',
+      settingsReRegistering: 'Re-registering…',
+      settingsReRegistered: 'Re-registration requested.',
+      settingsReRegisterFailed: 'Re-registration failed: {message}',
+      settingsSuggestionApplied: 'Now using {hotkey}.',
     };
 
     // ---------------------------------------------------------------------
@@ -471,6 +515,12 @@ window.__ModuleLoader__.load({
         background: C.primaryFill,
         color: C.onPrimary,
         transition: 'background 120ms ease',
+      },
+      buttonHover: {
+        background: C.primaryHover,
+      },
+      buttonFocus: {
+        boxShadow: '0 0 0 2px ' + C.focus,
       },
       buttonDisabled: {
         background: C.active,
@@ -812,28 +862,29 @@ window.__ModuleLoader__.load({
       },
       settingsTitle: {
         margin: 0,
-        fontSize: 18,
-        fontWeight: 600,
+        fontSize: TYPE.title,
+        fontWeight: 500,
+        lineHeight: '24px',
         color: C.text,
       },
       settingsDesc: {
         margin: 0,
-        fontSize: 13,
-        lineHeight: 1.6,
+        fontSize: TYPE.body,
+        lineHeight: 1.55,
         color: C.textTertiary,
       },
       settingsCard: {
         display: 'flex',
         flexDirection: 'column',
-        gap: 14,
-        padding: '14px 16px',
+        gap: SPACE.md,
+        padding: '12px ' + SPACE.lg + 'px',
         background: C.surfaceMuted,
         border: '1px solid ' + C.borderL1,
         borderRadius: 12,
       },
       cardTitle: {
-        fontSize: 13,
-        fontWeight: 600,
+        fontSize: TYPE.control,
+        fontWeight: 500,
         color: C.text,
       },
       row: {
@@ -854,7 +905,7 @@ window.__ModuleLoader__.load({
         color: C.text,
       },
       rowHint: {
-        fontSize: 12,
+        fontSize: TYPE.hint,
         lineHeight: 1.5,
         color: C.textCaption,
       },
@@ -878,7 +929,7 @@ window.__ModuleLoader__.load({
         background: C.surface,
         color: C.text,
         fontFamily: C.font,
-        fontSize: 12,
+        fontSize: TYPE.control,
         textAlign: 'left',
         cursor: 'pointer',
       },
@@ -895,7 +946,7 @@ window.__ModuleLoader__.load({
       },
       recorderHint: {
         marginLeft: 'auto',
-        fontSize: 11,
+        fontSize: TYPE.caption,
         color: C.textCaption,
       },
       fieldError: {
@@ -911,7 +962,7 @@ window.__ModuleLoader__.load({
         background: 'transparent',
         color: C.link,
         fontFamily: C.font,
-        fontSize: 11,
+        fontSize: TYPE.caption,
         cursor: 'pointer',
       },
       controlDisabled: {
@@ -932,37 +983,37 @@ window.__ModuleLoader__.load({
         background: C.textTertiary,
       },
       statusLabel: {
-        fontSize: 13,
-        fontWeight: 600,
+        fontSize: TYPE.control,
+        fontWeight: 500,
         color: C.text,
       },
       statusDetail: {
-        fontSize: 12,
-        lineHeight: '18px',
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
         color: C.textTertiary,
         wordBreak: 'break-word',
       },
       notice: {
         padding: '6px 10px',
         borderRadius: 8,
-        fontSize: 12,
-        lineHeight: '18px',
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
         color: C.textSecondary,
         background: C.hover,
       },
       noticeError: {
         padding: '6px 10px',
         borderRadius: 8,
-        fontSize: 12,
-        lineHeight: '18px',
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
         color: C.danger,
         background: C.dangerBg,
       },
       noticeWarn: {
         padding: '6px 10px',
         borderRadius: 8,
-        fontSize: 12,
-        lineHeight: '18px',
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
         color: C.warn,
         background: C.hover,
       },
@@ -1002,7 +1053,7 @@ window.__ModuleLoader__.load({
       testRow: {
         display: 'flex',
         alignItems: 'center',
-        gap: 10,
+        gap: SPACE.sm,
         flexWrap: 'wrap',
       },
       secondaryButton: {
@@ -1012,13 +1063,182 @@ window.__ModuleLoader__.load({
         gap: 6,
         height: 28,
         padding: '0 12px',
+        boxSizing: 'border-box',
         border: '1px solid ' + C.borderL2,
         borderRadius: 8,
         background: 'transparent',
         color: C.text,
         fontFamily: C.font,
-        fontSize: 12,
+        fontSize: TYPE.control,
         cursor: 'pointer',
+        transition: 'background 120ms ease, border-color 120ms ease',
+      },
+      secondaryHover: {
+        background: C.hover,
+        border: '1px solid ' + C.borderL3,
+      },
+      secondaryFocus: {
+        border: '1px solid ' + C.focus,
+        boxShadow: '0 0 0 2px ' + C.focus,
+      },
+      noticeWrap: {
+        position: 'fixed',
+        top: 'calc(var(--dsh-frame-chrome-top, 0px) + 18px)',
+        left: 0,
+        right: 0,
+        zIndex: 320,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: SPACE.sm,
+        pointerEvents: 'none',
+        padding: '0 16px',
+        boxSizing: 'border-box',
+      },
+      noticeCard: {
+        pointerEvents: 'auto',
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: SPACE.md,
+        width: 'min(460px, calc(100vw - 32px))',
+        boxSizing: 'border-box',
+        padding: '12px 14px',
+        background: C.card,
+        color: C.text,
+        border: '1px solid ' + C.borderL2,
+        borderRadius: 12,
+        boxShadow: C.shadow,
+        fontFamily: C.font,
+        animation: 'none',
+      },
+      noticeIcon: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 'none',
+        width: 26,
+        height: 26,
+        borderRadius: 8,
+        background: C.surfaceMuted,
+        color: C.textSecondary,
+      },
+      noticeIconWarn: {
+        background: C.dangerBg,
+        color: C.danger,
+      },
+      noticeBodyWrap: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        minWidth: 0,
+        flex: 1,
+      },
+      noticeTitle: {
+        fontSize: TYPE.control,
+        fontWeight: 500,
+        lineHeight: '18px',
+        color: C.text,
+      },
+      noticeText: {
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
+        color: C.textSecondary,
+        wordBreak: 'break-word',
+      },
+      noticeActions: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACE.sm,
+        marginTop: 6,
+        flexWrap: 'wrap',
+      },
+      noticePrimary: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 26,
+        padding: '0 10px',
+        border: 'none',
+        borderRadius: 7,
+        background: C.primaryFill,
+        color: C.onPrimary,
+        fontFamily: C.font,
+        fontSize: TYPE.hint,
+        fontWeight: 500,
+        cursor: 'pointer',
+      },
+      noticeGhost: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: 26,
+        padding: '0 8px',
+        border: '1px solid transparent',
+        borderRadius: 7,
+        background: 'transparent',
+        color: C.textSecondary,
+        fontFamily: C.font,
+        fontSize: TYPE.hint,
+        cursor: 'pointer',
+      },
+      noticeClose: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flex: 'none',
+        width: 22,
+        height: 22,
+        padding: 0,
+        border: 'none',
+        borderRadius: 6,
+        background: 'transparent',
+        color: C.textTertiary,
+        cursor: 'pointer',
+      },
+      conflictCard: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: SPACE.sm,
+        padding: '12px ' + SPACE.lg + 'px',
+        borderRadius: 12,
+        background: C.dangerBg,
+        border: '1px solid ' + C.borderL1,
+      },
+      conflictTitle: {
+        fontSize: TYPE.control,
+        fontWeight: 500,
+        color: C.danger,
+      },
+      conflictText: {
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
+        color: C.textSecondary,
+        wordBreak: 'break-word',
+      },
+      conflictHint: {
+        fontSize: TYPE.hint,
+        lineHeight: '17px',
+        color: C.textTertiary,
+      },
+      suggestionRow: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: SPACE.sm,
+        flexWrap: 'wrap',
+      },
+      suggestionCode: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        height: 24,
+        padding: '0 8px',
+        borderRadius: 6,
+        border: '1px solid ' + C.borderL2,
+        background: C.surface,
+        color: C.text,
+        fontFamily: C.font,
+        fontSize: TYPE.hint,
+        fontWeight: 500,
+        letterSpacing: '0.02em',
       },
     };
 
@@ -1176,6 +1396,23 @@ window.__ModuleLoader__.load({
      * validation. Direct invocation passes the wire value through unchanged (the codec is
      * only consumed by the unused typed-input helper), so this passthrough is sufficient.
      */
+    /** Passthrough strict codecs for the scalar/boolean Remote parameters (see above). */
+    const BOOLEAN_CODEC = {
+      mode: 'strict',
+      typeSymbol: 'dsh-quickbar#boolean',
+      create: function () {
+        return { parse: function (value) { return value; } };
+      },
+      jsonSchema: { type: 'boolean' },
+    };
+    const TEXT_CODEC = {
+      mode: 'strict',
+      typeSymbol: 'dsh-quickbar#string',
+      create: function () {
+        return { parse: function (value) { return value; } };
+      },
+      jsonSchema: { type: 'string' },
+    };
     const SELECTION_CODEC = {
       mode: 'strict',
       typeSymbol: 'dsh-quickbar#QuickbarSelection',
@@ -1211,6 +1448,14 @@ window.__ModuleLoader__.load({
         // v4: the in-app overlay mirrors its selection to the Host (native popup parity).
         descriptor('setSelection', {
           parameters: [{ name: 'selection', wire: 'selection', source: 'json', codec: SELECTION_CODEC }],
+        }),
+        // v5: send-then-raise and the native panel's submit acknowledgement.
+        descriptor('raiseWindow'),
+        descriptor('reportSubmitResult', {
+          parameters: [
+            { name: 'ok', wire: 'ok', source: 'json', codec: BOOLEAN_CODEC },
+            { name: 'message', wire: 'message', source: 'json', codec: TEXT_CODEC },
+          ],
         }),
       ],
     };
@@ -1458,6 +1703,43 @@ window.__ModuleLoader__.load({
       };
     }
 
+    /** Map the native popup's SUBMIT images into the v2 prepared-image shape. */
+    function mapIncomingImages(rawImages) {
+      const mapped = [];
+      if (!Array.isArray(rawImages)) return mapped;
+      for (const entry of rawImages) {
+        if (mapped.length >= MAX_IMAGES) break;
+        if (entry === null || typeof entry !== 'object') continue;
+        const mediaType = typeof entry.mediaType === 'string' ? entry.mediaType : '';
+        if (INCOMING_IMAGE_MEDIA_TYPES.indexOf(mediaType) < 0) continue;
+        const base64 = typeof entry.base64 === 'string' ? entry.base64 : '';
+        if (base64 === '') continue;
+        const extension = mediaType === 'image/jpeg' ? 'jpg' : mediaType === 'image/png' ? 'png' : mediaType === 'image/webp' ? 'webp' : 'gif';
+        const name = typeof entry.name === 'string' && entry.name !== '' ? entry.name : 'quickbar-image.' + extension;
+        mapped.push({
+          mediaType: mediaType,
+          base64: base64,
+          dataUrl: 'data:' + mediaType + ';base64,' + base64,
+          name: name,
+          ...(typeof entry.width === 'number' && isFinite(entry.width) && entry.width > 0 ? { width: Math.round(entry.width) } : {}),
+          ...(typeof entry.height === 'number' && isFinite(entry.height) && entry.height > 0 ? { height: Math.round(entry.height) } : {}),
+          bytes: Math.floor(base64.length * 3 / 4),
+          fromNative: true,
+        });
+      }
+      return mapped;
+    }
+
+    /** First valid suggested replacement for a conflicted global hotkey. */
+    function suggestAlternativeHotkey(currentSpec) {
+      const current = typeof currentSpec === 'string' ? currentSpec.trim().toLowerCase() : '';
+      for (const candidate of SUGGESTED_HOTKEYS) {
+        if (candidate === current) continue;
+        if (isValidSpec(candidate)) return candidate;
+      }
+      return SUGGESTED_HOTKEYS[0];
+    }
+
     // ---------------------------------------------------------------------
     // Store: one observable snapshot consumed through useSyncExternalStore
     // ---------------------------------------------------------------------
@@ -1487,6 +1769,8 @@ window.__ModuleLoader__.load({
         selection: null,
         popover: null,
         fileStatus: 'loading',
+        onboarding: null,
+        conflict: null,
       };
 
       function emit() {
@@ -1618,6 +1902,95 @@ window.__ModuleLoader__.load({
     function IconFile() {
       return h('svg', { width: 12, height: 12, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, style: { display: 'block' } },
         h('path', { d: 'M4 2h5l3 3v9H4V2Zm5 0v3h3', stroke: 'currentColor', strokeWidth: 1.4, strokeLinejoin: 'round' }));
+    }
+
+    function IconSpark() {
+      return h('svg', { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, style: { display: 'block' } },
+        h('path', { d: 'M8 1.6 9.7 6.3 14.4 8 9.7 9.7 8 14.4 6.3 9.7 1.6 8 6.3 6.3 8 1.6Z', stroke: 'currentColor', strokeWidth: 1.3, strokeLinejoin: 'round' }));
+    }
+
+    function IconAlert() {
+      return h('svg', { width: 13, height: 13, viewBox: '0 0 16 16', fill: 'none', 'aria-hidden': true, style: { display: 'block' } },
+        h('path', { d: 'M8 1.8 15 14H1L8 1.8Z', stroke: 'currentColor', strokeWidth: 1.3, strokeLinejoin: 'round' }),
+        h('path', { d: 'M8 6v3.4', stroke: 'currentColor', strokeWidth: 1.5, strokeLinecap: 'round' }),
+        h('circle', { cx: 8, cy: 11.6, r: 0.9, fill: 'currentColor' }));
+    }
+
+    // ---------------------------------------------------------------------
+    // Notices (first-run guidance + hotkey conflict) ride the same shell.overlay
+    // registration as the quick-ask dialog; no second overlay surface.
+    // ---------------------------------------------------------------------
+    function renderNoticeCard(options) {
+      return h('div', {
+        key: options.key,
+        'data-quickbar-notice': options.kind,
+        role: 'status',
+        style: S.noticeCard,
+      },
+      h('span', {
+        style: options.warn === true ? Object.assign({}, S.noticeIcon, S.noticeIconWarn) : S.noticeIcon,
+        'aria-hidden': 'true',
+      }, options.warn === true ? h(IconAlert) : h(IconSpark)),
+      h('div', { style: S.noticeBodyWrap },
+        h('div', { style: S.noticeTitle }, options.title),
+        h('div', { style: S.noticeText }, options.text),
+        h('div', { style: S.noticeActions },
+          h('button', {
+            type: 'button',
+            'data-quickbar-notice-settings': 'true',
+            onClick: options.onSettings,
+            style: S.noticePrimary,
+          }, options.settingsLabel),
+          h('button', {
+            type: 'button',
+            'data-quickbar-notice-dismiss': 'true',
+            onClick: options.onDismiss,
+            style: S.noticeGhost,
+          }, options.dismissLabel))),
+      h('button', {
+        type: 'button',
+        title: options.closeLabel,
+        'aria-label': options.closeLabel,
+        onClick: options.onDismiss,
+        style: S.noticeClose,
+      }, h(IconClose)));
+    }
+
+    function renderNotices(snap, actions, t) {
+      const cards = [];
+      if (snap.onboarding !== null && snap.onboarding !== undefined) {
+        cards.push(renderNoticeCard({
+          key: 'onboarding',
+          kind: 'onboarding',
+          warn: false,
+          title: t('noticeOnboardingTitle'),
+          text: t('noticeOnboardingBody', { hotkey: snap.onboarding.hotkey }),
+          settingsLabel: t('noticeGoSettings'),
+          dismissLabel: t('noticeDismiss'),
+          closeLabel: t('noticeClose'),
+          onSettings: function () { actions.openSettings(); },
+          onDismiss: function () { actions.dismissOnboarding(); },
+        }));
+      }
+      if (snap.conflict !== null && snap.conflict !== undefined) {
+        const suggestion = typeof snap.conflict.suggestion === 'string' && snap.conflict.suggestion !== ''
+          ? ' ' + t('noticeConflictSuggestion', { hotkey: formatAccel(snap.conflict.suggestion) })
+          : '';
+        cards.push(renderNoticeCard({
+          key: 'conflict',
+          kind: 'conflict',
+          warn: true,
+          title: t('noticeConflictTitle'),
+          text: t('noticeConflictBody', { hotkey: snap.conflict.hotkey, message: snap.conflict.message }) + suggestion,
+          settingsLabel: t('noticeGoSettings'),
+          dismissLabel: t('noticeDismiss'),
+          closeLabel: t('noticeClose'),
+          onSettings: function () { actions.openSettings(); },
+          onDismiss: function () { actions.dismissConflict(); },
+        }));
+      }
+      if (cards.length === 0) return null;
+      return h('div', { style: S.noticeWrap, 'data-quickbar-notices': 'true' }, cards);
     }
 
     // ---------------------------------------------------------------------
@@ -1782,7 +2155,8 @@ window.__ModuleLoader__.load({
         setAttachmentError(null);
       }, [snap.open]);
 
-      if (!snap.open) return null;
+      const notices = renderNotices(snap, actions, t);
+      if (!snap.open) return notices;
 
       const busy = snap.busy === true;
       const hasContent = text.trim() !== '' || images.length > 0 || files.length > 0;
@@ -2029,7 +2403,7 @@ window.__ModuleLoader__.load({
         }, children);
       }
 
-      return h('div', {
+      const dialog = h('div', {
         'data-quickbar-overlay': 'true',
         style: S.overlay,
         onMouseDown: function (event) {
@@ -2194,14 +2568,48 @@ window.__ModuleLoader__.load({
           onClick: send,
           style: canSend ? S.button : Object.assign({}, S.button, S.buttonDisabled),
         }, busy ? h(Spinner) : h(IconSend), busy ? t('overlaySending') : t('overlaySend')))));
+      return h(React.Fragment, null, notices, dialog);
     }
 
     // ---------------------------------------------------------------------
     // Settings page (registered into settings.section)
     // ---------------------------------------------------------------------
+    /** One button primitive with the DESIGN.md state set: default/hover/focus/disabled/loading. */
+    function UiButton(props) {
+      const [hover, setHover] = React.useState(false);
+      const [focus, setFocus] = React.useState(false);
+      const disabled = props.disabled === true;
+      const variant = props.variant === 'primary' ? 'primary' : 'secondary';
+      let style = variant === 'primary' ? Object.assign({}, S.button) : Object.assign({}, S.secondaryButton);
+      if (!disabled && hover === true) style = Object.assign({}, style, variant === 'primary' ? S.buttonHover : S.secondaryHover);
+      if (!disabled && focus === true) style = Object.assign({}, style, variant === 'primary' ? S.buttonFocus : S.secondaryFocus);
+      if (disabled) style = Object.assign({}, style, S.controlDisabled);
+      const attrs = Object.assign({}, props.attrs || {}, {
+        'data-quickbar-button': variant,
+        type: 'button',
+        disabled: disabled,
+        style: style,
+      });
+      const children = props.loading === true && typeof props.loadingLabel === 'string' ? props.loadingLabel : props.children;
+      return h('button', Object.assign({}, attrs, {
+        onClick: disabled ? undefined : props.onClick,
+        onMouseEnter: function () { setHover(true); },
+        onMouseLeave: function () { setHover(false); },
+        onFocus: function () { setFocus(true); },
+        onBlur: function () { setFocus(false); },
+        title: props.title,
+      }), props.loading === true ? h(Spinner) : null, children);
+    }
+
     function Toggle(props) {
       const checked = props.checked === true;
       const disabled = props.disabled === true;
+      const [hover, setHover] = React.useState(false);
+      const [focus, setFocus] = React.useState(false);
+      let style = Object.assign({}, S.switchTrack, checked ? S.switchTrackOn : S.switchTrackOff);
+      if (!disabled && hover === true) style = Object.assign({}, style, { opacity: 0.9 });
+      if (!disabled && focus === true) style = Object.assign({}, style, { boxShadow: '0 0 0 2px ' + C.focus });
+      if (disabled) style = Object.assign({}, style, S.controlDisabled);
       return h('button', {
         type: 'button',
         role: 'switch',
@@ -2212,12 +2620,11 @@ window.__ModuleLoader__.load({
           if (disabled) return;
           props.onChange(!checked);
         },
-        style: Object.assign(
-          {},
-          S.switchTrack,
-          checked ? S.switchTrackOn : S.switchTrackOff,
-          disabled ? S.controlDisabled : null,
-        ),
+        onMouseEnter: function () { setHover(true); },
+        onMouseLeave: function () { setHover(false); },
+        onFocus: function () { setFocus(true); },
+        onBlur: function () { setFocus(false); },
+        style: style,
       }, h('span', { style: checked ? Object.assign({}, S.switchThumb, S.switchThumbOn) : S.switchThumb }));
     }
 
@@ -2225,6 +2632,8 @@ window.__ModuleLoader__.load({
       const t = props.t;
       const [recording, setRecording] = React.useState(false);
       const [hint, setHint] = React.useState(null);
+      const [hover, setHover] = React.useState(false);
+      const [focus, setFocus] = React.useState(false);
       const ref = React.useRef(null);
       const disabled = props.disabled === true;
       const value = typeof props.value === 'string' ? props.value : '';
@@ -2287,9 +2696,20 @@ window.__ModuleLoader__.load({
           },
           onKeyDown: onKeyDown,
           onBlur: function () {
+            setFocus(false);
             if (recording) stop();
           },
-          style: Object.assign({}, S.recorder, recording ? S.recorderActive : null, disabled ? S.controlDisabled : null),
+          onFocus: function () { setFocus(true); },
+          onMouseEnter: function () { setHover(true); },
+          onMouseLeave: function () { setHover(false); },
+          style: Object.assign(
+            {},
+            S.recorder,
+            recording ? S.recorderActive : null,
+            !disabled && hover === true && !recording ? { border: '1px solid ' + C.borderL3 } : null,
+            !disabled && focus === true && !recording ? { boxShadow: '0 0 0 2px ' + C.focus } : null,
+            disabled ? S.controlDisabled : null,
+          ),
         },
         h('span', { style: recording ? S.recorderPlaceholder : S.recorderValue }, display),
         recording ? h('span', { style: S.recorderHint }, t('hotkeyCancelHint')) : null),
@@ -2314,6 +2734,7 @@ window.__ModuleLoader__.load({
       const snap = React.useSyncExternalStore(store.subscribe, store.getSnapshot);
       const [notice, setNotice] = React.useState(null);
       const [testing, setTesting] = React.useState(false);
+      const [registering, setRegistering] = React.useState(false);
       const closeSettings = typeof props.close === 'function' ? props.close : null;
 
       const cfg = snap.config;
@@ -2322,14 +2743,31 @@ window.__ModuleLoader__.load({
       const controlsDisabled = unavailable || readOnly;
       const state = snap.state;
       const stateInfo = describeState(snap, t);
+      const conflictActive = stateInfo.code === 'error';
+      const currentSpec = state !== null && state !== undefined && typeof state.hotkey === 'string' && state.hotkey !== ''
+        ? state.hotkey
+        : cfg.hotkey;
+      const suggestion = conflictActive ? actions.suggestAlternativeHotkey(currentSpec) : null;
 
       function write(field, value) {
-        if (controlsDisabled) return;
+        if (controlsDisabled) return Promise.resolve({ ok: false, message: t('readOnly') });
         setNotice(null);
-        Promise.resolve(actions.write(field, value)).then(function (result) {
-          if (result !== null && result.ok === false) setNotice({ kind: 'error', text: result.message });
+        return Promise.resolve(actions.write(field, value)).then(function (result) {
+          if (result !== null && result !== undefined && result.ok === false) setNotice({ kind: 'error', text: result.message });
+          return result;
         }).catch(function (error) {
           console.warn('[quickbar] config write failed outside the guarded path:', error);
+          setNotice({ kind: 'error', text: t('writeRejected') });
+          return { ok: false };
+        });
+      }
+
+      function applySuggestion(spec) {
+        if (typeof spec !== 'string' || spec === '') return;
+        write('hotkey', spec).then(function (result) {
+          if (result !== null && result !== undefined && result.ok === true) {
+            setNotice({ kind: 'info', text: t('settingsSuggestionApplied', { hotkey: formatAccel(spec) }) });
+          }
         });
       }
 
@@ -2346,11 +2784,48 @@ window.__ModuleLoader__.load({
         });
       }
 
+      function runReregister() {
+        if (registering) return;
+        setNotice(null);
+        setRegistering(true);
+        write('hotkey', cfg.hotkey).then(function (result) {
+          setRegistering(false);
+          if (result !== null && result !== undefined && result.ok === false) {
+            setNotice({ kind: 'error', text: t('settingsReRegisterFailed', { message: typeof result.message === 'string' ? result.message : '' }) });
+            return;
+          }
+          setNotice({ kind: 'info', text: t('settingsReRegistered') });
+        }).catch(function (error) {
+          setRegistering(false);
+          setNotice({ kind: 'error', text: t('settingsReRegisterFailed', { message: errorText(error) }) });
+        });
+      }
+
       const rows = [];
 
       if (unavailable) rows.push(h('div', { key: 'unavailable', style: S.noticeWarn }, t('unavailable')));
       else if (snap.configStatus === 'loading') rows.push(h('div', { key: 'loading', style: S.notice }, t('configLoading')));
       else if (readOnly) rows.push(h('div', { key: 'readonly', style: S.notice }, t('readOnly')));
+
+      // Conflict is shown clearly, with one suggested alternative and a one-click apply.
+      if (conflictActive) {
+        rows.push(h('div', { key: 'conflict', style: S.conflictCard, 'data-quickbar-conflict': 'true' },
+          h('div', { style: S.conflictTitle }, t('settingsConflictTitle')),
+          stateInfo.detail !== null
+            ? h('div', { style: S.conflictText, 'data-quickbar-conflict-reason': 'true' }, stateInfo.detail)
+            : null,
+          h('div', { style: S.conflictHint }, t('settingsConflictHint')),
+          suggestion !== null
+            ? h('div', { style: S.suggestionRow },
+              h('span', { style: S.suggestionCode, 'data-quickbar-suggestion': suggestion }, t('settingsSuggestion', { hotkey: formatAccel(suggestion) })),
+              h(UiButton, {
+                variant: 'secondary',
+                disabled: controlsDisabled,
+                attrs: { 'data-quickbar-use-suggestion': 'true' },
+                onClick: function () { applySuggestion(suggestion); },
+              }, t('settingsUseSuggestion')))
+            : null));
+      }
 
       rows.push(h('div', { key: 'behavior', style: S.settingsCard },
         h('div', { style: S.cardTitle }, t('sectionBehavior')),
@@ -2412,14 +2887,24 @@ window.__ModuleLoader__.load({
         stateInfo.detail !== null ? h('div', { style: S.statusDetail, 'data-quickbar-status-detail': 'true' }, stateInfo.detail) : null,
         stateInfo.hotkeyLine !== null ? h('div', { style: S.statusDetail }, stateInfo.hotkeyLine) : null,
         h('div', { style: S.statusDetail }, t('statusAppliedHint')),
+        // Compact re-register / test affordance, one accent (primary = test).
         h('div', { style: S.testRow },
-          h('button', {
-            type: 'button',
-            'data-quickbar-test': 'true',
+          h(UiButton, {
+            variant: 'primary',
+            loading: testing,
+            loadingLabel: t('testing'),
             disabled: testing,
+            attrs: { 'data-quickbar-test': 'true' },
             onClick: runTest,
-            style: testing ? Object.assign({}, S.secondaryButton, S.controlDisabled) : S.secondaryButton,
-          }, testing ? t('testing') : t('test')),
+          }, t('test')),
+          h(UiButton, {
+            variant: 'secondary',
+            loading: registering,
+            loadingLabel: t('settingsReRegistering'),
+            disabled: controlsDisabled || registering,
+            attrs: { 'data-quickbar-reregister': 'true' },
+            onClick: runReregister,
+          }, t('settingsReRegister')),
           h('span', { style: S.rowHint }, t('testHint'))),
         notice !== null ? h('div', {
           role: 'status',
@@ -2519,7 +3004,23 @@ window.__ModuleLoader__.load({
         catalogGeneration: 0,
         defaultsGeneration: 0,
         disposed: false,
+        lastSubmittedSessionId: null,
+        scrollRaf: null,
+        scrollToken: 0,
+        onboardingShown: false,
+        conflictSeen: new Set(),
+        settingsOpening: false,
       };
+      /** Timers owned by this plugin lifetime (cancelled on teardown). */
+      const ownedTimeouts = new Set();
+      function ownedTimeout(callback, delayMs) {
+        const id = setTimeout(function () {
+          ownedTimeouts.delete(id);
+          if (!env.disposed) callback();
+        }, delayMs);
+        ownedTimeouts.add(id);
+        return id;
+      }
       const seenNonces = new Set();
       /** Nonces of native-popup `submit` events already accepted (separate stream of ids). */
       const seenSubmitNonces = new Set();
@@ -2535,10 +3036,20 @@ window.__ModuleLoader__.load({
         return ctx.locale.register(NS, { zh: ZH, en: EN });
       }, 'quickbar: locale dictionaries');
 
-      // Native-popup submits must stop touching services once the plugin unloads.
+      // Native-popup submits and notice/scroll work must stop once the plugin unloads.
       ctx.effect(function () {
         return function () {
           env.disposed = true;
+          for (const id of ownedTimeouts) clearTimeout(id);
+          ownedTimeouts.clear();
+          if (env.scrollRaf !== null && typeof cancelAnimationFrame === 'function') {
+            try {
+              cancelAnimationFrame(env.scrollRaf);
+            } catch (error) {
+              // ignore
+            }
+            env.scrollRaf = null;
+          }
         };
       }, 'quickbar: external submit teardown');
 
@@ -2585,6 +3096,7 @@ window.__ModuleLoader__.load({
         if (state === null || typeof state !== 'object') return;
         if (typeof state.hotkeyState !== 'string') return;
         store.set({ state: state, remoteReady: true, stateError: null });
+        maybeShowNotices(state);
         // The host echoes its last trigger in every state; a reconnect can deliver a
         // toggle this client never saw (dedupe by nonce keeps the normal path single).
         maybeResumePending(state);
@@ -2603,6 +3115,229 @@ window.__ModuleLoader__.load({
           return document.querySelector('[role="dialog"][aria-modal="true"]:not([data-quickbar-card])') !== null;
         } catch (error) {
           return false;
+        }
+      }
+
+      // ---------------------------------------------------------------- notices / settings bridge
+      function maybeShowNotices(state) {
+        if (state === null || typeof state !== 'object') return;
+        // First run: one dismissible guidance card per install.
+        if (!env.onboardingShown) {
+          env.onboardingShown = true;
+          const onboarded = readStoredJson(LS_ONBOARDED_KEY);
+          if (onboarded === null || onboarded === undefined) {
+            const spec = typeof state.hotkey === 'string' && state.hotkey !== '' ? state.hotkey : env.cfg.hotkey;
+            store.set({ onboarding: { hotkey: formatAccel(spec) } });
+          }
+        }
+        // Hotkey conflict: one visible card per distinct error, never per status event.
+        if (state.hotkeyState !== 'error') return;
+        const message = typeof state.hotkeyError === 'string' && state.hotkeyError !== '' ? state.hotkeyError : t('statusError');
+        if (env.conflictSeen.has(message)) return;
+        const stored = readStoredJson(LS_CONFLICT_KEY);
+        const dismissed = stored !== null && stored !== undefined && Array.isArray(stored.signatures) ? stored.signatures : [];
+        env.conflictSeen.add(message);
+        if (dismissed.indexOf(message) >= 0) return;
+        const spec = typeof state.hotkey === 'string' && state.hotkey !== '' ? state.hotkey : env.cfg.hotkey;
+        store.set({
+          conflict: {
+            message: message,
+            hotkey: formatAccel(spec),
+            signature: message,
+            suggestion: suggestAlternativeHotkey(spec),
+          },
+        });
+      }
+
+      function dismissOnboarding() {
+        writeStoredJson(LS_ONBOARDED_KEY, { at: Date.now() });
+        store.set({ onboarding: null });
+      }
+
+      function dismissConflict() {
+        const conflict = store.getSnapshot().conflict;
+        if (conflict !== null && conflict !== undefined && typeof conflict.signature === 'string') {
+          const stored = readStoredJson(LS_CONFLICT_KEY);
+          const signatures = stored !== null && stored !== undefined && Array.isArray(stored.signatures) ? stored.signatures.slice() : [];
+          if (signatures.indexOf(conflict.signature) < 0) signatures.push(conflict.signature);
+          writeStoredJson(LS_CONFLICT_KEY, { signatures: signatures.slice(-10), at: Date.now() });
+        }
+        store.set({ conflict: null });
+      }
+
+      /** The shell's own trigger label ("trigger" in the `settings` namespace), when present. */
+      function settingsTriggerLabel() {
+        try {
+          const bind = ctx.locale.bind('settings');
+          const label = bind('trigger');
+          return typeof label === 'string' && label !== '' && label !== 'trigger' ? label : null;
+        } catch (error) {
+          return null;
+        }
+      }
+
+      function findSettingsTrigger() {
+        if (typeof document === 'undefined') return null;
+        try {
+          const label = settingsTriggerLabel();
+          const nodes = document.querySelectorAll('button[aria-haspopup="dialog"]');
+          for (const node of nodes) {
+            const aria = node.getAttribute('aria-label') || '';
+            const text = (node.textContent || '').trim();
+            if (label !== null && (aria === label || text === label)) return node;
+            if (aria === '设置' || aria === 'Settings' || text === '设置' || text === 'Settings') return node;
+          }
+        } catch (error) {
+          return null;
+        }
+        return null;
+      }
+
+      function selectQuickbarSection(attempt) {
+        if (env.disposed) return;
+        try {
+          const label = t('nav');
+          const dialogs = document.querySelectorAll('[data-shortcut-modal], [role="dialog"]');
+          for (const dialog of dialogs) {
+            const buttons = dialog.querySelectorAll('button, [role="tab"], [role="button"]');
+            for (const node of buttons) {
+              if ((node.textContent || '').trim() === label) {
+                node.click();
+                return;
+              }
+            }
+          }
+        } catch (error) {
+          // fall through to retry
+        }
+        if (attempt < 6) ownedTimeout(function () { selectQuickbarSection(attempt + 1); }, 120);
+      }
+
+      /**
+       * Best-effort "去设置": open the shell-owned settings dialog (clicking its trigger,
+       * or dispatching the product Settings shortcut) and then select 快捷唤起. The shell
+       * exposes no programmatic navigation API, so every step is guarded and optional.
+       */
+      function openSettings() {
+        if (env.disposed || env.settingsOpening) return;
+        env.settingsOpening = true;
+        ownedTimeout(function () { env.settingsOpening = false; }, 800);
+        try {
+          if (typeof document === 'undefined') return;
+          if (document.querySelector('[data-shortcut-modal]') !== null) {
+            selectQuickbarSection(0);
+            return;
+          }
+          const trigger = findSettingsTrigger();
+          if (trigger !== null) {
+            trigger.click();
+            selectQuickbarSection(0);
+            return;
+          }
+          const state = store.getSnapshot().state;
+          const isMac = (state !== null && state !== undefined && state.platform === 'darwin')
+            || (typeof navigator !== 'undefined' && /Mac/iu.test(navigator.platform || ''));
+          if (typeof window === 'undefined' || typeof KeyboardEvent !== 'function') return;
+          window.dispatchEvent(new KeyboardEvent('keydown', {
+            key: 'Comma',
+            code: 'Comma',
+            keyCode: 188,
+            which: 188,
+            metaKey: isMac,
+            ctrlKey: !isMac,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+          }));
+          selectQuickbarSection(0);
+        } catch (error) {
+          console.warn('[quickbar] opening settings failed:', error);
+        }
+      }
+
+      // ---------------------------------------------------------------- remote: ack / raise
+      function callQuickbarRemote(method, args) {
+        return Promise.resolve(ensureApi()).then(function (api) {
+          if (api === null || api === undefined || typeof api[method] !== 'function') return null;
+          return Promise.resolve(api[method].apply(api, args));
+        }).catch(function (error) {
+          console.warn('[quickbar] remote ' + method + ' failed:', error);
+          return null;
+        });
+      }
+
+      /** Tell the native panel whether the submit was accepted (ok closes it, message shows inline). */
+      function reportSubmitResultSafe(ok, message) {
+        const accepted = ok === true;
+        // Two declared parameters: pass `undefined` for an absent message so the wire keeps one field.
+        const args = [accepted, typeof message === 'string' && message !== '' ? message : undefined];
+        return callQuickbarRemote('reportSubmitResult', args).then(function (result) {
+          if (result !== null && result !== undefined && result.ok === false) {
+            console.debug('[quickbar] reportSubmitResult rejected:', remoteFailureText(result));
+          }
+        });
+      }
+
+      /** Send-then-raise: the Host only raises when the client asks (best effort). */
+      function raiseWindowSafe() {
+        return callQuickbarRemote('raiseWindow', []).then(function (result) {
+          if (result !== null && result !== undefined && result.ok === false) {
+            console.debug('[quickbar] raiseWindow rejected:', remoteFailureText(result));
+          }
+        });
+      }
+
+      // ---------------------------------------------------------------- auto-scroll
+      function scrollConversationToBottom(sessionId) {
+        try {
+          if (typeof document === 'undefined') return false;
+          let container = null;
+          if (typeof sessionId === 'string' && sessionId !== '') {
+            let scope = null;
+            try {
+              scope = document.querySelector('[data-conversation-session="' + sessionId.replace(/["\\]/gu, '\\$&') + '"]');
+            } catch (error) {
+              scope = null;
+            }
+            if (scope !== null && scope !== undefined) container = scope.querySelector('[data-conversation-scroll]');
+          }
+          if (container === null || container === undefined) {
+            const all = document.querySelectorAll('[data-conversation-scroll]');
+            container = all.length === 1 ? all[0] : null;
+          }
+          if (container === null || container === undefined) container = document.querySelector('[data-conversation-content]');
+          if (container === null || container === undefined) return false;
+          const height = typeof container.scrollHeight === 'number' ? container.scrollHeight : 0;
+          if (height <= 0) return false;
+          container.scrollTop = height;
+          return true;
+        } catch (error) {
+          return false;
+        }
+      }
+
+      /** Scroll after navigation settles: retry a few frames, never throw, never leak. */
+      function scheduleConversationScroll(sessionId) {
+        try {
+          if (env.disposed || typeof document === 'undefined' || typeof requestAnimationFrame !== 'function') return;
+          if (env.scrollRaf !== null && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(env.scrollRaf);
+          env.scrollToken += 1;
+          const token = env.scrollToken;
+          const deadline = Date.now() + 3000;
+          function step() {
+            if (env.disposed || token !== env.scrollToken) {
+              env.scrollRaf = null;
+              return;
+            }
+            if (scrollConversationToBottom(sessionId) || Date.now() >= deadline) {
+              env.scrollRaf = null;
+              return;
+            }
+            env.scrollRaf = requestAnimationFrame(step);
+          }
+          env.scrollRaf = requestAnimationFrame(step);
+        } catch (error) {
+          env.scrollRaf = null;
         }
       }
 
@@ -3297,11 +4032,12 @@ window.__ModuleLoader__.load({
         return applied;
       }
 
-      async function submitExternal(text, selection, markerAt) {
+      async function submitExternal(text, selection, images, markerAt) {
         const value = typeof text === 'string' ? text : '';
         if (value.trim() === '') return false;
         if (env.disposed) return false;
         let accepted = false;
+        let failureMessage = null;
         try {
           await rehydrateExternalSelection();
           if (env.disposed) return false;
@@ -3312,16 +4048,19 @@ window.__ModuleLoader__.load({
               console.warn('[quickbar] applying the native selection failed; using the remembered one:', error);
             }
           }
+          const mappedImages = mapIncomingImages(images);
           await waitUntilIdle(15000);
           if (env.disposed) return false;
-          accepted = await submitPrompt(value, { images: [], files: [] });
+          accepted = (await submitPrompt(value, { images: mappedImages, files: [] })) === true;
           if (accepted !== true) {
-            const error = store.getSnapshot().error;
-            console.warn('[quickbar] native submit did not complete:', error !== null && error !== undefined ? error : 'unknown error');
+            const currentError = store.getSnapshot().error;
+            failureMessage = typeof currentError === 'string' && currentError !== '' ? currentError : t('overlayErrorGeneric');
+            console.warn('[quickbar] native submit did not complete:', failureMessage);
           }
         } catch (error) {
           console.warn('[quickbar] native submit failed:', error);
           accepted = false;
+          failureMessage = t('overlayErrorGeneric');
         } finally {
           if (accepted !== true && typeof markerAt === 'number') releaseSubmitMarker(markerAt, value);
           try {
@@ -3330,12 +4069,18 @@ window.__ModuleLoader__.load({
             // closing the overlay is best effort
           }
         }
-        return accepted;
+        // The native panel owns the visible result: ack first (close or inline error), then raise.
+        await reportSubmitResultSafe(accepted === true, accepted === true ? null : failureMessage);
+        if (accepted === true) {
+          await raiseWindowSafe();
+          if (!env.disposed) scheduleConversationScroll(env.lastSubmittedSessionId);
+        }
+        return accepted === true;
       }
 
-      function queueExternalSubmit(text, selection, markerAt) {
+      function queueExternalSubmit(text, selection, images, markerAt) {
         externalSubmitQueue = externalSubmitQueue.then(function () {
-          return submitExternal(text, selection, markerAt);
+          return submitExternal(text, selection, images, markerAt);
         }).catch(function (error) {
           console.warn('[quickbar] external submit queue failed:', error);
         });
@@ -3356,7 +4101,7 @@ window.__ModuleLoader__.load({
         queuedExternalSubmits.add(signature);
         if (queuedExternalSubmits.size > 100) queuedExternalSubmits.clear();
         if (!consumeSubmitMarker(at, event.text)) return;
-        queueExternalSubmit(event.text, event.selection, at);
+        queueExternalSubmit(event.text, event.selection, event.images, at);
       }
 
       function maybeResumePendingSubmit(state) {
@@ -3376,7 +4121,7 @@ window.__ModuleLoader__.load({
         queuedExternalSubmits.add(signature);
         if (queuedExternalSubmits.size > 100) queuedExternalSubmits.clear();
         if (!consumeSubmitMarker(pending.at, pending.text)) return;
-        queueExternalSubmit(pending.text, pending.selection, pending.at);
+        queueExternalSubmit(pending.text, pending.selection, pending.images, pending.at);
       }
 
       // ---------------------------------------------------------------- submit
@@ -3607,6 +4352,8 @@ window.__ModuleLoader__.load({
               throw createLocalizedError(t('overlayPromptRejected', { message: detail !== '' ? detail : 'unknown rejection' }), null);
             }
             store.set({ busy: false, error: null });
+            env.lastSubmittedSessionId = target.sessionId;
+            scheduleConversationScroll(target.sessionId);
             return true;
           } finally {
             try {
@@ -3638,6 +4385,10 @@ window.__ModuleLoader__.load({
         chooseWorkspace: chooseWorkspace,
         chooseModel: chooseModel,
         reloadCatalog: reloadCatalog,
+        dismissOnboarding: dismissOnboarding,
+        dismissConflict: dismissConflict,
+        openSettings: openSettings,
+        suggestAlternativeHotkey: suggestAlternativeHotkey,
         formatAccel: formatAccel,
         eventToSpec: eventToSpec,
       };

@@ -52,8 +52,8 @@ trap cleanup EXIT
 build_slice() { # <arch> <output>
     local arch="$1"
     local out="$2"
-    "$CLANG" -O2 -arch "$arch" -mmacosx-version-min="$MIN_MACOS" \
-        -o "$out" "$SRC" -framework Carbon -framework AppKit
+    "$CLANG" -O2 -Wall -Wextra -arch "$arch" -mmacosx-version-min="$MIN_MACOS" \
+        -o "$out" "$SRC" -framework Carbon -framework AppKit -framework QuartzCore
 }
 
 build_slice arm64 "$TMP_DIR/quickbar-hotkey.arm64"

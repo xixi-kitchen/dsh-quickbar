@@ -623,6 +623,21 @@ else
     fail "design constants/implementation" "missing:$design_fail"
 fi
 
+# Regression: the input text view must be in the window's view hierarchy, or it
+# can never become first responder (the palette becomes untypable).
+if grep -Fq '[container addSubview:scroll]' "$SRC" && ! grep -Fq '[_inputScroll removeFromSuperview]' "$SRC"; then
+    pass "input text view is attached to the container hierarchy (typable)"
+else
+    fail "input hierarchy" "the NSScrollView/NSTextView is not added to the container"
+fi
+
+# Labels are sized to fit their measured text, so they must clip, never ellipsize.
+if grep -Fq '[label setLineBreakMode:NSLineBreakByClipping]' "$SRC"; then
+    pass "labels clip instead of ellipsizing their measured frames"
+else
+    fail "label truncation" "labels still truncate their exact-width frames"
+fi
+
 # ---------------------------------------------------------------------------
 # 13. binary size (report only)
 # ---------------------------------------------------------------------------

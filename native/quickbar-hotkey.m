@@ -1204,7 +1204,7 @@ static NSTextField *qb_make_label(NSString *text, CGFloat fontSize, NSColor *col
     [label setFont:[NSFont systemFontOfSize:fontSize]];
     [label setTextColor:color];
     [label setAlignment:alignment];
-    [label setLineBreakMode:NSLineBreakByTruncatingTail];
+    [label setLineBreakMode:NSLineBreakByClipping];
     [label setMaximumNumberOfLines:1];
     return label;
 }
@@ -1560,6 +1560,9 @@ static NSImage *qb_make_test_image(void) {
     [paragraph release];
     _textView = textView;
     [scroll setDocumentView:textView];
+    /* The scroll view must join the container hierarchy: a text view outside a
+       window cannot become first responder, which made the palette untypable. */
+    [container addSubview:scroll];
 
     errorLabel = qb_make_label(@"", kQBErrorFontSize, [NSColor systemRedColor], NSTextAlignmentLeft);
     [errorLabel setHidden:YES];
@@ -1704,7 +1707,7 @@ static NSImage *qb_make_test_image(void) {
     NSFont *tagFont = tag != nil ? [tag font] : [NSFont systemFontOfSize:kQBSmallLabelFontSize];
     NSDictionary *tagAttributes = [NSDictionary dictionaryWithObject:tagFont
                                                               forKey:NSFontAttributeName];
-    CGFloat tagWidth = ceil([[tag stringValue] sizeWithAttributes:tagAttributes].width);
+    CGFloat tagWidth = ceil([[tag stringValue] sizeWithAttributes:tagAttributes].width) + 8.0;
     CGFloat tagX = 10.0;
     CGFloat chevronSize = 8.0;
     CGFloat chevronX = width - 10.0 - chevronSize;
@@ -1729,8 +1732,8 @@ static NSImage *qb_make_test_image(void) {
 }
 
 - (void)layoutToolbarRowAtY:(CGFloat)y width:(CGFloat)innerWidth {
-    CGFloat workspaceWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.30);
-    CGFloat modelWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.42);
+    CGFloat workspaceWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.22);
+    CGFloat modelWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.54);
     CGFloat effortWidth = innerWidth - 2.0 * kQBToolbarWidgetGap - workspaceWidth - modelWidth;
     CGFloat x = kQBHorizontalInset;
 
@@ -1835,11 +1838,11 @@ static NSImage *qb_make_test_image(void) {
                                      kQBSendButtonWidth, kQBSendButtonHeight)];
     hintAttributes = [NSDictionary dictionaryWithObject:[NSFont systemFontOfSize:kQBHintFontSize]
                                                   forKey:NSFontAttributeName];
-    hintWidth = ceil([[_footerRight stringValue] sizeWithAttributes:hintAttributes].width);
+    hintWidth = ceil([[_footerRight stringValue] sizeWithAttributes:hintAttributes].width) + 8.0;
     [_footerRight setFrame:NSMakeRect(NSMinX([_sendButton frame]) - 12.0 - hintWidth,
                                       footerY + floor((kQBFooterHeight - 16.0) / 2.0), hintWidth,
                                       16.0)];
-    hintWidth = ceil([[_footerLeft stringValue] sizeWithAttributes:hintAttributes].width);
+    hintWidth = ceil([[_footerLeft stringValue] sizeWithAttributes:hintAttributes].width) + 8.0;
     [_footerLeft setFrame:NSMakeRect(kQBHorizontalInset,
                                      footerY + floor((kQBFooterHeight - 16.0) / 2.0), hintWidth,
                                      16.0)];

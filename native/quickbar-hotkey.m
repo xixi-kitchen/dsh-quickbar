@@ -1732,8 +1732,8 @@ static NSImage *qb_make_test_image(void) {
 }
 
 - (void)layoutToolbarRowAtY:(CGFloat)y width:(CGFloat)innerWidth {
-    CGFloat workspaceWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.22);
-    CGFloat modelWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.54);
+    CGFloat workspaceWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.26);
+    CGFloat modelWidth = floor((innerWidth - 2.0 * kQBToolbarWidgetGap) * 0.50);
     CGFloat effortWidth = innerWidth - 2.0 * kQBToolbarWidgetGap - workspaceWidth - modelWidth;
     CGFloat x = kQBHorizontalInset;
 

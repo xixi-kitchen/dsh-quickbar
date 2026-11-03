@@ -1,0 +1,69 @@
+{
+  "format": 1,
+  "title": {
+    "en": "Quickbar for DeepSeek Harness",
+    "zh": "快捷唤起 · DeepSeek Harness 插件"
+  },
+  "description": {
+    "en": "A system-wide hotkey for DeepSeek Harness on macOS: press it to open a lightweight always-on-top quick-input popup with workspace, model and reasoning-effort pickers; the main window shows the answer.",
+    "zh": "macOS 上的 DeepSeek Harness 系统级全局快捷键插件：按下即弹出轻量置顶输入框，可切换工作区/模型/思考强度，回车后主窗口展示答案。"
+  },
+  "metadata": {
+    "categories": {
+      "input": {
+        "title": {
+          "en": "Input & shortcuts",
+          "zh": "输入与快捷键"
+        }
+      }
+    },
+    "labels": {
+      "macos": {
+        "title": {
+          "en": "macOS only",
+          "zh": "仅 macOS"
+        }
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-quickbar",
+      "title": {
+        "en": "Quickbar",
+        "zh": "快捷唤起"
+      },
+      "description": {
+        "en": "Global hotkey (⌘⇧Space) opens a lightweight always-on-top input popup with workspace, model and reasoning-effort pickers. Enter raises the main window and streams the answer. In-app ⌘⇧K overlay adds image paste and file attachments.",
+        "zh": "全局快捷键（⌘⇧Space）弹出轻量置顶输入框，带工作区/模型/思考强度下拉；回车后主窗口到前台并流式输出答案。窗口内 ⌘⇧K 浮层还支持粘图与附加文件。"
+      },
+      "icon": "icon.svg",
+      "author": "xixikitchen",
+      "metadata": {
+        "category": "input",
+        "labels": [
+          "macos"
+        ],
+        "keywords": [
+          "hotkey",
+          "global-shortcut",
+          "quickbar",
+          "quick-input",
+          "macos"
+        ]
+      },
+      "versions": [
+        {
+          "version": "0.1.0",
+          "publishTimestamp": 1793715936,
+          "source": {
+            "type": "npm"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+          }
+        }
+      ]
+    }
+  ]
+}

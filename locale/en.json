@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Quickbar",
+    "description": "A system-wide global hotkey raises DeepSeek Harness and opens a floating quick-input overlay, so a prompt can be typed from anywhere and sent to the current session."
+  }
+}

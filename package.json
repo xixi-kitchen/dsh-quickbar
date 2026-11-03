@@ -1,0 +1,59 @@
+{
+  "name": "dsh-quickbar",
+  "version": "0.1.0",
+  "description": "Global hotkey for DeepSeek Harness (macOS): a lightweight always-on-top quick-input popup with workspace, model and reasoning-effort pickers. Press ⌘⇧Space, type, Enter — the main window opens with the answer.",
+  "type": "module",
+  "main": "./index.js",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "author": "xixikitchen",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "dsh-plugin",
+    "plugin",
+    "hotkey",
+    "global-shortcut",
+    "quick-input",
+    "quickbar",
+    "macos"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.3.0-0"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "LICENSE",
+    "native/quickbar-hotkey",
+    "native/quickbar-hotkey.m",
+    "native/build.sh",
+    "native/check.sh",
+    "native/README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-typert-protocol": ">=0.1.7-alpha.0 <0.3.0-0",
+    "@deepseek-ai/schemastery": "^3.18.4",
+    "@deepseek-ai/cordis": "^4.0.4"
+  }
+}

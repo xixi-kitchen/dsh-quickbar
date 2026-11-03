@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "快捷唤起",
+    "description": "全局快捷键随时唤起 DeepSeek Harness，并弹出浮动快捷输入框，在当前会话里直接输入并发送提示词。"
+  }
+}

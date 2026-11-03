@@ -1,0 +1,11 @@
+# dsh-quickbar bundle patch: one Host row mounting the quickbar plugin.
+# The defaults mirror the plugin Config schema; the row supports live editing
+# from the Quickbar settings page (every Config field is volatile).
+- insert:
+    - id: quickbar
+      name: 'dsh-quickbar'
+      config:
+        enabled: true
+        hotkey: 'cmd+shift+space'
+        raiseWindow: true
+        inAppShortcut: 'cmd+shift+k'

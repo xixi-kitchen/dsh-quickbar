@@ -94,7 +94,7 @@ static const CGFloat kQBToolbarHeight = 26.0;
 static const CGFloat kQBInputMinHeight = 44.0;
 static const NSUInteger kQBInputMaxLines = 5;
 static const CGFloat kQBFooterHeight = 26.0;
-static const CGFloat kQBImageChipSize = 56.0;
+static const CGFloat kQBImageChipSize = 72.0;
 static const CGFloat kQBImageChipCornerRadius = 8.0;
 static const CGFloat kQBImageChipGap = 8.0;
 static const CGFloat kQBImageStripGap = 8.0;
@@ -825,7 +825,7 @@ typedef NS_ENUM(NSInteger, QBSendState) {
     if (_image != nil) {
         NSSize imageSize = [_image size];
         if (imageSize.width > 0.0 && imageSize.height > 0.0) {
-            CGFloat scale = MAX(NSWidth(bounds) / imageSize.width,
+            CGFloat scale = MIN(NSWidth(bounds) / imageSize.width,
                                 NSHeight(bounds) / imageSize.height);
             NSSize drawSize = NSMakeSize(imageSize.width * scale, imageSize.height * scale);
             NSRect destination = NSMakeRect((NSWidth(bounds) - drawSize.width) / 2.0,
@@ -2907,9 +2907,9 @@ static NSImage *qb_make_test_image(void) {
                          kQBOpenDurationMs, kQBCloseDurationMs, kQBSentHoldMs];
     [self logInteraction:(kQBCardCornerRadius == 16.0 && kQBToolbarHeight == 26.0 &&
                              kQBInputMinHeight == 44.0 && kQBInputMaxLines == 5 &&
-                             kQBImageChipSize == 56.0 && kQBSendButtonHeight == 26.0)
+                             kQBImageChipSize == 72.0 && kQBSendButtonHeight == 26.0)
                   format:@"geometry card-radius=16 toolbar=26 input-min=44 max-lines=5 "
-                         @"chip=56 send=26"];
+                         @"chip=72 send=26"];
     [self logInteraction:(kQBInputFontSize == 13.0 && kQBControlFontSize == 13.0 &&
                              kQBHintFontSize == 11.5 && kQBSmallLabelFontSize == 11.0)
                   format:@"type-scale input=13 controls=13 hints=11.5 pills=11"];

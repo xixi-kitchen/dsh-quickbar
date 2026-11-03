@@ -229,6 +229,8 @@ class QuickbarService extends TypertRemoteService {
     this.disposed = false
     /** Set by dispose(); repeated teardown calls share the same bounded wait. */
     this.disposal = null
+    /** Watchdog for one native-popup submit waiting on the client's ack. */
+    this.submitAckTimer = null
     /** One entry per open `watch` consumer: `{ events, wake }`. */
     this.subscribers = new Set()
   }
@@ -572,6 +574,7 @@ class QuickbarService extends TypertRemoteService {
    * backoff unless the helper explained itself with ERROR or the budget is spent.
    */
   finishAttempt(reason) {
+    this.clearSubmitAck()
     this.detachStreams()
     this.stdin = null
     this.handle = null
@@ -836,6 +839,19 @@ class QuickbarService extends TypertRemoteService {
       this.lastTriggerAt = at
       this.pendingSubmit = { text, selection, images, at }
       this.publish({ type: 'submit', text, selection, images, nonce: this.nonce, at })
+      /* The popup waits for the client's acknowledgement. Fail fast when no
+       * window is connected, and bound the wait otherwise, so the panel always
+       * ends in a readable state instead of a bare timeout. */
+      this.clearSubmitAck()
+      if (this.subscribers.size === 0) {
+        this.writeHelperLine('SUBMIT_FAIL 没有已连接的窗口，请先打开主窗口再试')
+      } else {
+        this.submitAckTimer = setTimeout(() => {
+          this.submitAckTimer = null
+          this.writeHelperLine('SUBMIT_FAIL 窗口未响应：请刷新窗口后重试')
+        }, 12000)
+        if (typeof this.submitAckTimer.unref === 'function') this.submitAckTimer.unref()
+      }
     } catch (error) {
       logWarn(this.ctx, '[quickbar] native submit failed:', error)
     }
@@ -857,24 +873,36 @@ class QuickbarService extends TypertRemoteService {
    * @param ok - whether the prompt was accepted
    * @param message - failure reason shown inline in the panel
    */
-  reportSubmitResult(ok, message) {
+  clearSubmitAck() {
+    if (this.submitAckTimer !== null) {
+      clearTimeout(this.submitAckTimer)
+      this.submitAckTimer = null
+    }
+  }
+
+  /** Write one control line to the helper's stdin; best effort, never throws. */
+  writeHelperLine(line) {
     try {
       const stdin = this.stdin
       if (stdin === undefined || stdin === null || typeof stdin.write !== 'function' || stdin.writable === false) {
-        logDebug(this.ctx, '[quickbar] reportSubmitResult: helper stdin is unavailable')
-        return { ok: true }
+        logDebug(this.ctx, '[quickbar] helper stdin is unavailable for a control line')
+        return
       }
-      if (ok === true) {
-        stdin.write('SUBMIT_OK\n')
-        return { ok: true }
-      }
-      const reason = typeof message === 'string' && message.trim() !== '' ? message.replace(/\s+/g, ' ').slice(0, 500) : 'unknown error'
-      stdin.write(`SUBMIT_FAIL ${reason}\n`)
-      return { ok: true }
+      stdin.write(line.endsWith('\n') ? line : `${line}\n`)
     } catch (error) {
-      logWarn(this.ctx, '[quickbar] reportSubmitResult could not write to the helper stdin:', error)
+      logWarn(this.ctx, '[quickbar] could not write a control line to the helper:', error)
+    }
+  }
+
+  reportSubmitResult(ok, message) {
+    this.clearSubmitAck()
+    if (ok === true) {
+      this.writeHelperLine('SUBMIT_OK')
       return { ok: true }
     }
+    const reason = typeof message === 'string' && message.trim() !== '' ? message.replace(/\s+/g, ' ').slice(0, 500) : 'unknown error'
+    this.writeHelperLine(`SUBMIT_FAIL ${reason}`)
+    return { ok: true }
   }
 
   /**

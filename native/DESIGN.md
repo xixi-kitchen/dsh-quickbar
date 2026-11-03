@@ -42,7 +42,7 @@
 
 - 单一字族：**系统字体**（`NSFont.systemFont`，SF Pro）。Operate 表面不需要展示字体。
 - 固定字号（不做流式）：
-  - 输入文字 **17 pt**，行高 1.45（`NSParagraphStyle.lineSpacing ≈ 4`）；
+  - 输入文字 **15 pt**，行高 1.4（`NSParagraphStyle.lineSpacing ≈ 3`）；
   - 选择器按钮文字 **13 pt**（medium 字重）；选择器小标签 **11 pt**（secondary，全大写不加字距）；
   - 底栏快捷键提示 **11.5 pt**（secondary）；数字（pid/计数）使用 tabular（`monospacedDigitSystemFont`）。
 - 字重对比只两档：regular（正文）/ medium（可操作控件）。不用 bold 做强调。
@@ -77,7 +77,11 @@
 | 冲突 | 面板不弹出；由 Host/前端提示（见 v5 契约） |
 
 - 动效只表达状态，不做编排；所有时长 ≤ 250ms。
-- 点击卡片外部 → 关闭（`windowDidResignKey`）；再次按快捷键 → 打开/关闭切换。
+- 点击卡片外部 / 切到别的 App → 关闭（保留草稿，只有 Esc 会清空）。
+- **瞬时焦点丢失不算点外部**：输入法候选窗、剪贴板历史选择器（非激活面板）、系统面板
+  都会短暂抢走 key window；此时 App 仍处于激活态，浮窗**保持可见**并等焦点回来，
+  否则粘贴类工具一点就整框消失。只有激活态变了（真正切到别的 App）才关闭。
+- 再次按快捷键 → 打开/关闭切换。
 
 ## 7. 键盘与交互细则
 

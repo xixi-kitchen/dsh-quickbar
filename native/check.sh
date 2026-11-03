@@ -597,7 +597,7 @@ grep -q 'setBorderWidth' "$SRC" && design_fail="$design_fail outer-border"
 grep -q 'kQBOpenDurationMs = 180' "$SRC" || design_fail="$design_fail open180"
 grep -q 'kQBCloseDurationMs = 120' "$SRC" || design_fail="$design_fail close120"
 grep -q 'kQBSentHoldMs = 150' "$SRC" || design_fail="$design_fail sent150"
-grep -q 'kQBInputFontSize = 17.0' "$SRC" || design_fail="$design_fail input17"
+grep -q 'kQBInputFontSize = 15.0' "$SRC" || design_fail="$design_fail input17"
 grep -q 'kQBControlFontSize = 13.0' "$SRC" || design_fail="$design_fail controls13"
 grep -q 'kQBHintFontSize = 11.5' "$SRC" || design_fail="$design_fail hints11.5"
 grep -q 'kQBSmallLabelFontSize = 11.0' "$SRC" || design_fail="$design_fail pills11"
@@ -629,6 +629,14 @@ if grep -Fq '[container addSubview:scroll]' "$SRC" && ! grep -Fq '[_inputScroll 
     pass "input text view is attached to the container hierarchy (typable)"
 else
     fail "input hierarchy" "the NSScrollView/NSTextView is not added to the container"
+fi
+
+# Regression: a transient key-window grab (IME / clipboard picker) must not
+# close the palette; only losing activation does.
+if grep -Fq 'kBQResignHideDelay' "$SRC" && grep -Fq 'if ([NSApp isActive])' "$SRC"; then
+    pass "transient focus loss keeps the palette (closes only on app deactivation)"
+else
+    fail "focus-loss handling" "resign-key close ignores transient in-app focus grabs"
 fi
 
 # Labels are sized to fit their measured text, so they must clip, never ellipsize.

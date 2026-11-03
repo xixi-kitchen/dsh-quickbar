@@ -108,13 +108,16 @@ static const CGFloat kQBInputContainerInsetX = 4.0;
 static const CGFloat kQBInputContainerInsetY = 2.0;
 
 /* Fixed type scale (no fluid sizes; DESIGN.md §4). */
-static const CGFloat kQBInputFontSize = 17.0;
+static const CGFloat kQBInputFontSize = 15.0;
+/* Grace period before a lost key window closes the palette: transient focus
+ * grabs (IME candidates, clipboard pickers) hand focus back within it. */
+static const NSTimeInterval kBQResignHideDelay = 0.35;
 static const CGFloat kQBControlFontSize = 13.0;
 static const CGFloat kQBHintFontSize = 11.5;
 static const CGFloat kQBSmallLabelFontSize = 11.0;
 static const CGFloat kQBSendFontSize = 13.0;
 static const CGFloat kQBErrorFontSize = 13.0;
-static const CGFloat kQBInputLineSpacing = 4.0;
+static const CGFloat kQBInputLineSpacing = 3.0;
 
 /* Motion budget (milliseconds) — motion only expresses state, never > 250 ms. */
 enum {
@@ -563,6 +566,7 @@ typedef NS_ENUM(NSInteger, QBSendState) {
     NSDictionary *_config;         /* last CFG object (retained) */
     NSArray *_modelEntries;        /* flattened provider/model entries (retained) */
     NSTimer *_ackTimer;
+    NSTimer *_resignHideTimer;
     NSTimer *_transientErrorTimer;
     NSString *_errorText;
     CGFloat _cardWidth;
@@ -594,6 +598,8 @@ typedef NS_ENUM(NSInteger, QBSendState) {
 - (BOOL)pasteFromPasteboard:(NSPasteboard *)pasteboard;
 - (void)setAutomatedMode:(NSUInteger)mode;
 - (int)runInteractionChecks;
+- (void)cancelResignHide;
+- (void)resignHideTimerFired:(NSTimer *)timer;
 @end
 
 @interface QBController ()
@@ -1145,8 +1151,13 @@ typedef NS_ENUM(NSInteger, QBSendState) {
         }
         return;
     }
-    /* Escape: close and clear (no submit). */
+    /* Escape: close and clear (no submit) — unless an IME composition is
+       active, where Escape must cancel the composition instead. */
     if (keyCode == 53) {
+        if ([self hasMarkedText]) {
+            [super keyDown:event];
+            return;
+        }
         if (_owningController != nil) {
             [_owningController cancel];
         }
@@ -2544,6 +2555,7 @@ static NSImage *qb_make_test_image(void) {
         return;
     }
     _panelVisible = NO;
+    [self cancelResignHide];
     [self stopAckTimer];
     [self invalidateTransientErrorTimer];
     [self setInputFocused:NO];
@@ -2620,6 +2632,9 @@ static NSImage *qb_make_test_image(void) {
         return NO;
     }
     if (commandSelector == @selector(cancelOperation:)) {
+        if ([textView hasMarkedText]) {
+            return NO;
+        }
         [self cancel];
         return YES;
     }
@@ -2644,10 +2659,34 @@ static NSImage *qb_make_test_image(void) {
 - (void)windowDidBecomeKey:(NSNotification *)notification {
     (void)notification;
     _panelBecameKeyThisShow = YES;
+    [self cancelResignHide];
     if (_panelVisible && _sendState != QBSendStateSending) {
         [self setInputFocused:YES];
         [_panel makeFirstResponder:_textView];
     }
+}
+
+- (void)cancelResignHide {
+    if (_resignHideTimer != nil) {
+        [_resignHideTimer invalidate];
+        _resignHideTimer = nil;
+    }
+}
+
+- (void)resignHideTimerFired:(NSTimer *)timer {
+    (void)timer;
+    _resignHideTimer = nil;
+    if (!_panelVisible || _sendState == QBSendStateSending) {
+        return;
+    }
+    /* Our app still owns the activation: the key window went to a transient
+     * panel (IME / clipboard picker) and will come back. Keep the palette. */
+    if ([NSApp isActive]) {
+        return;
+    }
+    /* A real outside click / app switch: close, but keep the draft so an
+     * accidental click never discards what the user typed (only Esc clears). */
+    [self hidePanelClearing:NO notifyCancel:NO];
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification {
@@ -2667,8 +2706,22 @@ static NSImage *qb_make_test_image(void) {
     if (_sendState == QBSendStateSending) {
         return;
     }
+    /*
+     * Transient key-window changes inside our own active app (an IME candidate
+     * window, a clipboard-history picker implemented as a non-activating panel,
+     * a system panel) must NOT close the palette: the user is composing or
+     * picking something that will be pasted back here. Only losing application
+     * activation (a real click on another app) closes it, and even then we wait
+     * a moment in case that other app hands focus straight back.
+     */
     [self setInputFocused:NO];
-    [self hidePanelClearing:YES notifyCancel:NO];
+    [self cancelResignHide];
+    _resignHideTimer = [NSTimer scheduledTimerWithTimeInterval:kBQResignHideDelay
+                                                        target:self
+                                                      selector:@selector(resignHideTimerFired:)
+                                                      userInfo:nil
+                                                       repeats:NO];
+    [[NSRunLoop mainRunLoop] addTimer:_resignHideTimer forMode:NSRunLoopCommonModes];
 }
 
 - (void)windowDidMove:(NSNotification *)notification {
@@ -2740,9 +2793,9 @@ static NSImage *qb_make_test_image(void) {
                              kQBImageChipSize == 56.0 && kQBSendButtonHeight == 26.0)
                   format:@"geometry card-radius=16 toolbar=26 input-min=44 max-lines=5 "
                          @"chip=56 send=26"];
-    [self logInteraction:(kQBInputFontSize == 17.0 && kQBControlFontSize == 13.0 &&
+    [self logInteraction:(kQBInputFontSize == 15.0 && kQBControlFontSize == 13.0 &&
                              kQBHintFontSize == 11.5 && kQBSmallLabelFontSize == 11.0)
-                  format:@"type-scale input=17 controls=13 hints=11.5 pills=11"];
+                  format:@"type-scale input=15 controls=13 hints=11.5 pills=11"];
     {
         BOOL cardOk = [_cardView isKindOfClass:[NSVisualEffectView class]] &&
                       [[_cardView layer] cornerRadius] == kQBCardCornerRadius &&
@@ -2770,7 +2823,7 @@ static NSImage *qb_make_test_image(void) {
                        [[_textView string] length] == 0 && ![_textView isRichText] &&
                        ![_textView drawsBackground] &&
                        inputFont != nil &&
-                       fabs([inputFont pointSize] - 17.0) < 0.01 &&
+                       fabs([inputFont pointSize] - 15.0) < 0.01 &&
                        ![_textView isAutomaticQuoteSubstitutionEnabled] &&
                        [_sendButton sendState] == QBSendStateDisabled &&
                        [[_footerRight stringValue] rangeOfString:@"Enter 发送"].location != NSNotFound &&
@@ -2778,7 +2831,7 @@ static NSImage *qb_make_test_image(void) {
                        [[_footerRight stringValue] rangeOfString:@"Esc 关闭"].location != NSNotFound &&
                        [[_footerLeft stringValue] rangeOfString:@"⌘V 粘图"].location != NSNotFound;
         [self logInteraction:inputOk
-                      format:@"multi-line transparent plain-text input 17pt, smart quotes off, "
+                      format:@"multi-line transparent plain-text input 15pt, smart quotes off, "
                              @"footer hints + accent send pill, send disabled when empty"];
     }
 

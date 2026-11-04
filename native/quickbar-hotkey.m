@@ -424,6 +424,31 @@ static NSImage *qb_pasteboard_image(NSPasteboard *pasteboard) {
  * PNG would be huge (screenshots), so one clipboard image stays a few hundred
  * kilobytes in the protocol line.
  */
+static NSImage *qb_downscaled_image(NSImage *image, CGFloat maxEdge) {
+    NSSize size = [image size];
+    CGFloat scale;
+    NSSize target;
+    NSImage *out;
+
+    if (image == nil || size.width <= 0.0 || size.height <= 0.0 || maxEdge <= 0.0) {
+        return image;
+    }
+    scale = MIN(1.0, maxEdge / MAX(size.width, size.height));
+    if (scale >= 1.0) {
+        return image;
+    }
+    target = NSMakeSize(MAX(1.0, round(size.width * scale)), MAX(1.0, round(size.height * scale)));
+    out = [[NSImage alloc] initWithSize:target];
+    [out lockFocus];
+    [[NSGraphicsContext currentContext] setImageInterpolation:NSImageInterpolationHigh];
+    [image drawInRect:NSMakeRect(0.0, 0.0, target.width, target.height)
+             fromRect:NSZeroRect
+            operation:NSCompositingOperationCopy
+             fraction:1.0];
+    [out unlockFocus];
+    return [out autorelease];
+}
+
 static NSDictionary *qb_image_payload(NSImage *image, NSUInteger ordinal) {
     NSBitmapImageRep *rep = nil;
     NSData *tiff;
@@ -435,6 +460,7 @@ static NSDictionary *qb_image_payload(NSImage *image, NSUInteger ordinal) {
     if (image == nil) {
         return nil;
     }
+    image = qb_downscaled_image(image, 1600.0);
     tiff = [image TIFFRepresentation];
     if (tiff != nil) {
         rep = [NSBitmapImageRep imageRepWithData:tiff];
@@ -451,10 +477,15 @@ static NSDictionary *qb_image_payload(NSImage *image, NSUInteger ordinal) {
     }
 
     data = [rep representationUsingType:NSBitmapImageFileTypePNG properties:[NSDictionary dictionary]];
-    if (data == nil || data.length > 3 * 1024 * 1024) {
+    if (data == nil || data.length > 1200 * 1024) {
         NSData *jpeg = [rep representationUsingType:NSBitmapImageFileTypeJPEG
-                                         properties:[NSDictionary dictionaryWithObject:@0.85
+                                         properties:[NSDictionary dictionaryWithObject:@0.80
                                                                                forKey:NSImageCompressionFactor]];
+        if (jpeg != nil && jpeg.length > 2400 * 1024) {
+            jpeg = [rep representationUsingType:NSBitmapImageFileTypeJPEG
+                                     properties:[NSDictionary dictionaryWithObject:@0.6
+                                                                           forKey:NSImageCompressionFactor]];
+        }
         if (jpeg != nil && (data == nil || jpeg.length < data.length)) {
             data = jpeg;
             mediaType = @"image/jpeg";

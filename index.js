@@ -43,7 +43,10 @@ const STABLE_HELPER_MS = 30_000
 const SPAWN_GRACE_MS = 2000
 /** Upper bound for waiting on helper exit during teardown (helper exits well inside it). */
 const TERMINATE_WAIT_MS = 3000
-const MAX_PROTOCOL_LINE = 64 * 1024
+// One SUBMIT line carries the prompt plus up to four base64 images, so the cap
+// must clear a few megabytes. Oversized lines are answered instead of dropped
+// (a dropped SUBMIT used to leave the popup spinning until its 15s timeout).
+const MAX_PROTOCOL_LINE = 32 * 1024 * 1024
 const MAX_STDERR_TAIL = 8192
 /** Backpressure cap for one slow `watch` consumer; oldest events are dropped. */
 const MAX_SUBSCRIBER_QUEUE = 256
@@ -482,6 +485,7 @@ class QuickbarService extends TypertRemoteService {
     if (text === '') return
     if (text.length > MAX_PROTOCOL_LINE) {
       logWarn(this.ctx, '[quickbar] ignoring an oversized helper protocol line')
+      if (text.startsWith('SUBMIT')) this.writeHelperLine('SUBMIT_FAIL 内容过大：请减少图片数量或缩小图片')
       return
     }
     const space = text.indexOf(' ')
@@ -838,19 +842,27 @@ class QuickbarService extends TypertRemoteService {
       this.nonce += 1
       this.lastTriggerAt = at
       this.pendingSubmit = { text, selection, images, at }
-      this.publish({ type: 'submit', text, selection, images, nonce: this.nonce, at })
-      /* The popup waits for the client's acknowledgement. Fail fast when no
-       * window is connected, and bound the wait otherwise, so the panel always
-       * ends in a readable state instead of a bare timeout. */
+      /* The popup waits for the client's acknowledgement. Arm the bound before
+       * publishing anything: a failing publish must still produce an ack, or the
+       * panel sits until its own 15s timeout with no explanation. */
       this.clearSubmitAck()
       if (this.subscribers.size === 0) {
+        this.publish({ type: 'status', state: this.getState() })
         this.writeHelperLine('SUBMIT_FAIL 没有已连接的窗口，请先打开主窗口再试')
-      } else {
-        this.submitAckTimer = setTimeout(() => {
-          this.submitAckTimer = null
-          this.writeHelperLine('SUBMIT_FAIL 窗口未响应：请刷新窗口后重试')
-        }, 12000)
-        if (typeof this.submitAckTimer.unref === 'function') this.submitAckTimer.unref()
+        return
+      }
+      this.submitAckTimer = setTimeout(() => {
+        this.submitAckTimer = null
+        this.writeHelperLine('SUBMIT_FAIL 窗口未响应：请刷新窗口后重试')
+      }, 12000)
+      if (typeof this.submitAckTimer.unref === 'function') this.submitAckTimer.unref()
+      try {
+        this.publish({ type: 'submit', text, selection, images, nonce: this.nonce, at })
+      } catch (error) {
+        this.clearSubmitAck()
+        logWarn(this.ctx, '[quickbar] publishing the submit event failed:', error)
+        this.writeHelperLine('SUBMIT_FAIL 提交失败：内容过大或窗口未连接')
+        return
       }
     } catch (error) {
       logWarn(this.ctx, '[quickbar] native submit failed:', error)

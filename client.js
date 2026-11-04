@@ -4509,10 +4509,13 @@ window.__ModuleLoader__.load({
           }
           store.close();
         }
-        window.addEventListener('keydown', onInAppKeyDown);
+        // Capture phase: the shell and other plugins register their own key
+        // handlers on window, and a bubble-phase listener ran too late once
+        // another handler stopped propagation (the in-app shortcut looked dead).
+        window.addEventListener('keydown', onInAppKeyDown, true);
         window.addEventListener('keydown', onEscapeKeyDown, true);
         return function () {
-          window.removeEventListener('keydown', onInAppKeyDown);
+          window.removeEventListener('keydown', onInAppKeyDown, true);
           window.removeEventListener('keydown', onEscapeKeyDown, true);
         };
       }, 'quickbar: keyboard listeners');

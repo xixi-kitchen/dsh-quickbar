@@ -143,6 +143,7 @@ window.__ModuleLoader__.load({
       writeRejected: '配置写入被拒绝。',
       overlayTitle: '问 DeepSeek',
       overlayPlaceholder: '输入问题，回车发送…',
+      commandOpen: '打开快捷输入',
       overlaySend: '发送',
       overlaySending: '发送中…',
       overlayClose: '关闭',
@@ -241,6 +242,7 @@ window.__ModuleLoader__.load({
       writeRejected: 'The settings write was rejected.',
       overlayTitle: 'Ask DeepSeek',
       overlayPlaceholder: 'Ask anything, then press Enter…',
+      commandOpen: 'Open quick input',
       overlaySend: 'Send',
       overlaySending: 'Sending…',
       overlayClose: 'Close',
@@ -1376,6 +1378,52 @@ window.__ModuleLoader__.load({
       if (event.ctrlKey) mods.push('ctrl');
       if (mods.length === 0) return null;
       return mods.join('+') + '+' + key;
+    }
+
+    /**
+     * Map a shortcut spec to the shell Shortcut Service's physical binding
+     * (`{ code, modifiers }`, modifiers from primary/control/alt/shift).
+     * Returns null when the spec or the key has no physical-code equivalent.
+     */
+    const SHORTCUT_CODE = {
+      space: 'Space',
+      enter: 'Enter',
+      tab: 'Tab',
+      escape: 'Escape',
+      backspace: 'Backspace',
+      delete: 'Delete',
+      arrowup: 'ArrowUp',
+      arrowdown: 'ArrowDown',
+      arrowleft: 'ArrowLeft',
+      arrowright: 'ArrowRight',
+      ',': 'Comma',
+      '.': 'Period',
+      '/': 'Slash',
+      ';': 'Semicolon',
+      "'": 'Quote',
+      '[': 'BracketLeft',
+      ']': 'BracketRight',
+      '\\': 'Backslash',
+      '-': 'Minus',
+      '=': 'Equal',
+      '`': 'Backquote',
+    };
+    function specToShortcutBinding(spec) {
+      const parsed = parseSpec(spec);
+      if (parsed === null) return null;
+      let code = SHORTCUT_CODE[parsed.key];
+      if (code === undefined) {
+        if (/^[a-z]$/u.test(parsed.key)) code = 'Key' + parsed.key.toUpperCase();
+        else if (/^[0-9]$/u.test(parsed.key)) code = 'Digit' + parsed.key;
+        else if (/^f([1-9]|1[0-9]|2[0-4])$/u.test(parsed.key)) code = parsed.key.toUpperCase();
+      }
+      if (code === undefined) return null;
+      const modifiers = [];
+      if (parsed.mods.cmd) modifiers.push('primary');
+      if (parsed.mods.shift) modifiers.push('shift');
+      if (parsed.mods.opt) modifiers.push('alt');
+      if (parsed.mods.ctrl) modifiers.push('control');
+      return { code: code, modifiers: modifiers };
     }
 
     function eventMatchesSpec(parsed, event) {
@@ -4484,6 +4532,7 @@ window.__ModuleLoader__.load({
           }
         }
         function onInAppKeyDown(event) {
+          if (env.shortcutCommand === true) return;
           if (event.defaultPrevented || event.repeat) return;
           if (store.getSnapshot().open) return;
           if (hasHostModal()) return;
@@ -4519,6 +4568,63 @@ window.__ModuleLoader__.load({
           window.removeEventListener('keydown', onEscapeKeyDown, true);
         };
       }, 'quickbar: keyboard listeners');
+
+      // ---------------------------------------------------------------- command registration
+      // The desktop app routes accepted shortcuts through the native keyboard
+      // bridge, so a DOM keydown listener never sees them. Register the real
+      // command in the shell Shortcut Service (it also shows up under
+      // Settings -> Shortcuts and honours user rebinds); the DOM listener above
+      // stays as the fallback for environments without that service.
+      ctx.inject(['shortcuts'], function (child) {
+        const candidates = [];
+        const configured = specToShortcutBinding(env.cfg.inAppShortcut);
+        if (configured !== null) candidates.push(configured);
+        candidates.push({ code: 'KeyK', modifiers: ['primary', 'shift'] });
+        candidates.push({ code: 'KeyK', modifiers: ['primary', 'alt'] });
+        const defaults = {};
+        for (let index = 0; index < 6; index += 1) {
+          const profile = ['desktop:macos', 'desktop:windows', 'desktop:linux', 'web:macos', 'web:windows', 'web:linux'][index];
+          defaults[profile] = candidates[0];
+        }
+        function openFromCommand() {
+          const snapshot = store.getSnapshot();
+          if (snapshot.open) {
+            store.close();
+            return;
+          }
+          if (hasHostModal()) return;
+          store.open('shortcut');
+        }
+        child.effect(function () {
+          for (let index = 0; index < candidates.length; index += 1) {
+            const binding = candidates[index];
+            const profileDefaults = {};
+            const profiles = ['desktop:macos', 'desktop:windows', 'desktop:linux', 'web:macos', 'web:windows', 'web:linux'];
+            for (let p = 0; p < profiles.length; p += 1) profileDefaults[profiles[p]] = binding;
+            try {
+              const dispose = child.shortcuts.register({
+                id: 'quickbar.open',
+                label: function () { return env.t('commandOpen'); },
+                aliases: ['quickbar', 'quick input', '快捷唤起'],
+                defaults: profileDefaults,
+                regions: ['page', 'editable', 'terminal'],
+                modals: [],
+                resolve: function () {
+                  return {
+                    status: 'handled',
+                    run: function () { openFromCommand(); },
+                  };
+                },
+              });
+              env.shortcutCommand = true;
+              return dispose;
+            } catch (error) {
+              console.warn('[quickbar] shortcut binding rejected, trying the next one:', error);
+            }
+          }
+          return function () {};
+        }, 'quickbar: shortcut command');
+      });
 
       // ---------------------------------------------------------------- slot registrations
       const injectFace = function () {

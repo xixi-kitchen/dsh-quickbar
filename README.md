@@ -90,15 +90,16 @@ native/quickbar-hotkey cmd+shift+space --ui-test '<cfg-json>' '你好'   # 一�
 node --check index.js && node --check client.js
 ```
 
-设计契约见 `CONTRACT.md`（Host/Client wire 类型、原生助手协议、各版本演进），Host 实现记录见
-`HOST_NOTES.md`，原生助手说明见 `native/README.md`。
+设计契约见 `CONTRACT.md`（Host/Client wire 类型、原生助手协议、各版本演进）；
+开发/调试/发版文档见 [`DEVELOPMENT.md`](DEVELOPMENT.md) 与 [`docs/dev/`](docs/dev/README.md)；
+原生助手说明见 [`native/README.md`](native/README.md)。
 
 ## 发布
 
 **npm**
 
 ```sh
-cd quickbar
+cd plugins/dsh-quickbar
 npm pack --dry-run     # 检查包内容
 npm publish --access public
 ```

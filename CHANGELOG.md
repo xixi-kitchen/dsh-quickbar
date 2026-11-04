@@ -37,6 +37,13 @@ Interaction and reliability pass on the native quick-input popup.
 - First-run guidance, hotkey-conflict notices, auto-scroll to the sent message,
   and a settings page polished to the same design language.
 
+### Docs
+- New developer docs under `docs/dev/` (architecture, native protocol, popup
+  decisions and pitfalls, testing recipes, release checklist) plus
+  `DEVELOPMENT.md`; the stale `HOST_NOTES.md` was folded into them.
+- Repository moved to the dedicated workspace layout
+  `plugins-workspace/plugins/dsh-quickbar`.
+
 ## 0.1.0 — 2026-11-03
 - First public version: global hotkey (`⌘⇧Space`), native popup with workspace /
   model / reasoning-effort pickers, in-app overlay with image paste and file

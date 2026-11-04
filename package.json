@@ -35,6 +35,7 @@
     "locale/*.json",
     "icon.svg",
     "README.md",
+    "DEVELOPMENT.md",
     "LICENSE",
     "native/quickbar-hotkey",
     "native/quickbar-hotkey.m",

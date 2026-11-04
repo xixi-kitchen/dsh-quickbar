@@ -1,6 +1,6 @@
 {
   "name": "dsh-quickbar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Global hotkey for DeepSeek Harness (macOS): a lightweight always-on-top quick-input popup with workspace, model and reasoning-effort pickers. Press ⌘⇧Space, type, Enter — the main window opens with the answer.",
   "type": "module",
   "main": "./index.js",
